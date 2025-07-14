@@ -1,16 +1,31 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  SafeAreaView, 
+  Platform, 
+  StatusBar, 
+  TouchableOpacity, 
+  ScrollView, 
+  Dimensions, 
+  Image,
+  ActivityIndicator
+} from 'react-native';
 import * as Font from 'expo-font';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { TabView, SceneMap } from 'react-native-tab-view';
 import { signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { useUser } from './contexts/UserContext';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
+  // All hooks must be called at the top level
   const [fontsLoaded, setFontsLoaded] = React.useState(false);
   const [index, setIndex] = React.useState(0);
+  const [loading, setLoading] = useState(false); // Moved to top level
   const [routes] = React.useState([
     { key: 'home', title: 'Home' },
     { key: 'dashboard', title: 'Dashboard' },
@@ -18,14 +33,61 @@ export default function HomeScreen({ navigation }) {
     { key: 'complaint', title: 'Complaint' },
     { key: 'account', title: 'Account' },
   ]);
+  const { user: userData, loading: userLoading, clearUserData } = useUser();
+  const [localLoading, setLocalLoading] = useState(true);
 
+  // Update local loading state when user data is loaded
+  useEffect(() => {
+    // Set a timeout to prevent infinite loading
+    const timer = setTimeout(() => {
+      if (localLoading) {
+        console.log('Loading timeout reached, forcing loading to false');
+        setLocalLoading(false);
+      }
+    }, 5000); // 5 second timeout
+
+    // Clean up the timeout if the component unmounts
+    return () => clearTimeout(timer);
+  }, [localLoading]);
+
+  // Update local loading based on userLoading
+  useEffect(() => {
+    if (!userLoading) {
+      setLocalLoading(false);
+    }
+  }, [userLoading]);
+
+  // Load fonts
   React.useEffect(() => {
-    Font.loadAsync({
-      'Outfit-Regular': require('./assets/fonts/Outfit-Regular.ttf'),
-      'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
-      'Outfit-Light': require('./assets/fonts/Outfit-Light.ttf'),
-    }).then(() => setFontsLoaded(true));
+    const loadFonts = async () => {
+      try {
+        await Font.loadAsync({
+          'Outfit-Regular': require('./assets/fonts/Outfit-Regular.ttf'),
+          'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
+          'Outfit-Light': require('./assets/fonts/Outfit-Light.ttf'),
+        });
+        setFontsLoaded(true);
+      } catch (error) {
+        console.error('Error loading fonts:', error);
+      } finally {
+        setLocalLoading(false);
+      }
+    };
+
+    loadFonts();
   }, []);
+
+  // Log user data changes for debugging
+  useEffect(() => {
+    console.log('User data in HomeScreen:', userData);
+  }, [userData]);
+
+  // Go to Account tab if coming from AccountSetup
+  React.useEffect(() => {
+    if (route?.params?.goToAccount) {
+      setIndex(4); // Account tab index
+    }
+  }, [route]);
 
   // Sample feed data
   const feed = [
@@ -103,18 +165,164 @@ export default function HomeScreen({ navigation }) {
   const ComplaintTab = () => (
     <View style={styles.centerTab}><Text style={styles.tabTitle}>Complaint Section (Coming Soon)</Text></View>
   );
-  const AccountTab = () => (
-    <View style={styles.centerTab}>
-      <Ionicons name="person-circle-outline" size={60} color="#2667ff" style={{ marginBottom: 10 }} />
-      <Text style={styles.accountTitle}>Account</Text>
-      <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
-        await signOut(auth);
-        navigation.replace('Login');
-      }}>
-        <Text style={styles.logoutText}>Log Out</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      await clearUserData();
+      navigation.replace('Login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const AccountTab = () => {
+    console.log('Rendering AccountTab:', { userLoading, localLoading, hasUserData: !!userData, userData });
+    
+    // Show loading state if we're still loading and don't have user data
+    if ((userLoading || localLoading) && !userData) {
+      return (
+        <View style={[styles.centerTab, { justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color="#2667ff" />
+          <Text style={{ marginTop: 10, color: '#666' }}>Loading profile...</Text>
+        </View>
+      );
+    }
+    
+    if (!userData) {
+      return (
+        <View style={[styles.centerTab, { justifyContent: 'center' }]}>
+          <Ionicons name="alert-circle" size={50} color="#ff6b6b" />
+          <Text style={{ marginTop: 10, color: '#666' }}>No user data available</Text>
+          <TouchableOpacity 
+            style={[styles.logoutBtn, { marginTop: 20 }]} 
+            onPress={() => {
+              clearUserData();
+              navigation.navigate('Login');
+            }}
+          >
+            <Text style={styles.logoutText}>Go to Login</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // If we have user data, show the profile
+    if (userData) {
+      return (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.userInfoContainer, { paddingBottom: 30 }]}>
+            <View style={styles.profileHeader}>
+              <View style={styles.coverPhoto}>
+                {userData?.coverPhoto ? (
+                  <Image 
+                    source={{ uri: userData.coverPhoto }} 
+                    style={styles.coverPhotoImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.coverPhotoPlaceholder}>
+                    <Ionicons name="images" size={50} color="#2667ff" />
+                  </View>
+                )}
+              </View>
+              
+              <View style={styles.profilePicContainer}>
+                {userData?.profilePic ? (
+                  <Image 
+                    source={{ uri: userData.profilePic }} 
+                    style={styles.profilePic} 
+                  />
+                ) : (
+                  <Ionicons name="person-circle" size={100} color="#2667ff" />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.accountInfo}>
+              <Text style={styles.accountName}>{userData?.name || userData?.username || 'User'}</Text>
+              <Text style={styles.accountUsername}>@{userData?.username || userData?.email?.split('@')[0] || 'user'}</Text>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="mail" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>{userData?.email || 'No email'}</Text>
+              </View>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="call" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>{userData?.mobile || 'No phone number'}</Text>
+              </View>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="card" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>Student ID: {userData?.studentID || 'Not provided'}</Text>
+              </View>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="calendar" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>Birthday: {userData?.birthday || 'Not provided'}</Text>
+              </View>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="school" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>School: {userData?.school || 'Not provided'}</Text>
+              </View>
+              
+              <View style={[styles.infoSection, { marginBottom: 5 }]}>
+                <Ionicons name="location" size={20} color="#666" style={styles.infoIcon} />
+                <Text style={styles.infoText}>{userData?.address || 'No address provided'}</Text>
+              </View>
+
+              <View style={[styles.infoSection, { flexDirection: 'column', alignItems: 'flex', marginBottom: 20 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                  <Ionicons name="document-text" size={20} color="#666" style={styles.infoIcon} />
+                  <Text style={{ fontFamily: 'Outfit-Bold', color: '#333' }}>About</Text>
+                </View>
+                <Text style={[styles.infoText, { marginLeft: 5, marginTop: 5 }]}>
+                  {userData?.bio || 'No bio provided'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 25 }}>
+              <TouchableOpacity 
+                style={styles.editProfileButton}
+                onPress={() => navigation.navigate('EditProfile')}
+              >
+                <Text style={styles.editProfileText}>Edit Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.logoutButton, { marginTop: 15 }]}
+                onPress={handleLogout}
+              >
+                <Text style={styles.logoutText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      );
+    }
+    
+    // If we don't have user data and not loading, show a message
+    return (
+      <View style={[styles.centerTab, { justifyContent: 'center' }]}>
+        <Ionicons name="alert-circle" size={50} color="#ff6b6b" />
+        <Text style={{ marginTop: 10, color: '#666' }}>No user data available</Text>
+        <TouchableOpacity 
+          style={[styles.logoutBtn, { marginTop: 20 }]} 
+          onPress={() => {
+            clearUserData();
+            navigation.navigate('Login');
+          }}
+        >
+          <Text style={styles.logoutText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderScene = SceneMap({
     home: HomeTab,
@@ -130,7 +338,7 @@ export default function HomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerBar}>
-        <Text style={styles.headerBrand}>CamPulse</Text>
+        <Text style={styles.headerBrand}>Safire</Text>
       </View>
       <TabView
         navigationState={{ index, routes }}
@@ -168,6 +376,7 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Container Styles
   safeArea: {
     flex: 1,
     backgroundColor: '#fff',
@@ -188,6 +397,8 @@ const styles = StyleSheet.create({
     color: '#2667ff',
     marginTop: 2,
   },
+
+  // Feed Styles
   feedScroll: {
     alignItems: 'center',
     paddingTop: 0,
@@ -215,105 +426,223 @@ const styles = StyleSheet.create({
   feedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
   feedUser: {
     fontFamily: 'Outfit-Bold',
-    fontSize: 14,
-    color: '#2667ff',
-    marginRight: 4,
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 6,
   },
   feedTime: {
     fontFamily: 'Outfit-Regular',
-    fontSize: 12,
-    color: '#888',
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
   },
   feedContent: {
     fontFamily: 'Outfit-Regular',
-    fontSize: 15,
-    color: '#222',
-    marginBottom: 8,
-    marginLeft: 2,
+    fontSize: 16,
+    color: '#333',
+    marginTop: 8,
+    lineHeight: 24,
   },
   feedActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 2,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e6e6e6',
+    paddingTop: 12,
   },
   feedActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 18,
+    marginRight: 20,
   },
   feedActionText: {
     fontFamily: 'Outfit-Regular',
-    fontSize: 13,
+    fontSize: 14,
     color: '#2667ff',
-    marginLeft: 3,
+    marginLeft: 8,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+
+  // Account Section Styles
+  userInfoContainer: {
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+  },
+  profileHeader: {
     alignItems: 'center',
-    backgroundColor: '#ffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e6ed',
-    paddingVertical: 16,
-    paddingBottom: Platform.OS === 'android' ? 20 : 28,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    zIndex: 10,
+    marginTop: 20,
   },
-  navItem: {
+  coverPhoto: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: -35,
+  },
+  coverPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPhotoPlaceholder: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
   },
-  navPlusWrapper: {
-    position: 'relative',
-    top: -28,
-    zIndex: 20,
-    width: 70,
-    alignItems: 'center',
+  profilePicContainer: {
+    position: 'absolute',
+    left: 20,
+    bottom: -50,
+    backgroundColor: '#fff',
+    borderRadius: 60,
+    padding: 3,
+    elevation: 3,
   },
-  navPlusButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: '#2667ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: '#2667ff',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 8,
+  profilePic: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
-  navLabel: {
+  accountInfo: {
+    padding: 15,
+    paddingTop: 60,
+  },
+  accountName: {
+    fontSize: 24,
     fontFamily: 'Outfit-Bold',
-    fontSize: 12,
-    color: '#2667ff',
-    marginTop: 2,
+    color: '#000',
+    marginBottom: -5,
   },
+  accountUsername: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    fontFamily: 'Outfit-Regular',
+  },
+  infoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    backgroundColor: '#f9f9f9',
+    padding: 15,
+    borderRadius: 18,
+  },
+  infoIcon: {
+    marginRight: 15,
+    width: 24,
+    textAlign: 'center',
+    color: '#2667ff',
+  },
+  infoText: {
+    fontSize: 15,
+    color: '#333',
+    fontFamily: 'Outfit-Regular',
+    flex: 1,
+  },
+
+  // Button Styles
+  editProfileButton: {
+    backgroundColor: '#ffff',
+    paddingVertical: 15,
+    borderRadius: 8,
+    borderColor:'#081c15',
+    borderWidth:1,
+    alignItems: 'center',
+    width: '100%',
+  },
+  editProfileText: {
+    color: '#081c15',
+    fontFamily: 'Outfit-Bold',
+    fontSize: 16,
+  },
+  logoutButton: {
+    backgroundColor: '#081c15',
+    paddingVertical: 15,
+    borderRadius: 18,
+    alignItems: 'center',
+    width: '100%',
+
+
+  },
+  logoutText: {
+    fontFamily: 'Outfit-Bold',
+    color: '#2667ff',
+    fontSize: 16,
+  },
+  logoutBtn: {
+    marginTop: 30,
+    backgroundColor: '#2667ff',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+
+  // Tab Styles
   centerTab: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    alignItems: 'center',
+    padding: 20,
   },
   tabTitle: {
     fontFamily: 'Outfit-Bold',
     fontSize: 22,
     color: '#2667ff',
-    marginTop: 10,
+  },
+  accountTitle: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 20,
+    color: '#2667ff',
+    marginBottom: 18,
+  },
+
+  // Bottom Nav Styles
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingVertical: 10,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  navItem: {
+    alignItems: 'center',
+  },
+  navIcon: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  navLabel: {
+    fontSize: 12,
+    fontFamily: 'Outfit-Regular',
+  },
+  navPlusWrapper: {
+    position: 'relative',
+  },
+  navPlusButton: {
+    position: 'absolute',
+    top: -20,
+    backgroundColor: '#2667ff',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   accountTitle: {
     fontFamily: 'Outfit-Bold',
@@ -324,7 +653,7 @@ const styles = StyleSheet.create({
   logoutBtn: {
     marginTop: 30,
     backgroundColor: '#2667ff',
-    borderRadius: 10,
+    borderRadius: 20,
     paddingVertical: 12,
     paddingHorizontal: 32,
   },
@@ -336,5 +665,8 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: '#2667ff',
     fontWeight: 'bold',
+  },
+  userInfoContainer: {
+    padding: 20,
   },
 });

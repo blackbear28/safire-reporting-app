@@ -12,13 +12,75 @@ import {
   Modal,
   Pressable,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from 'firebase/auth';
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  getDoc,
+  deleteDoc
+} from 'firebase/firestore';
+import { launchImageLibraryAsync, MediaTypeOptions } from 'expo-image-picker';
 import * as Google from 'expo-auth-session/providers/google';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCPyTC1B3bM14a7OcCaTSnKebKOh1Ntt-Y",
+  authDomain: "campulse-8c50e.firebaseapp.com",
+  projectId: "campulse-8c50e",
+  storageBucket: "campulse-8c50e.appspot.com",
+  messagingSenderId: "244725080770",
+  appId: "1:244725080770:web:9ab35ae367ffecbf92515b",
+  measurementId: "G-T4GWKP6WKQ"
+};
+
+// Initialize Firebase
+// const app = initializeApp(firebaseConfig);
+// const auth = getAuth(app);
+// const db = getFirestore(app);
+
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { UserProvider } from './contexts/UserContext';
 import HomeScreen from './HomeScreen';
+import { FontAwesome } from '@expo/vector-icons';
+
+function LoadingModal({ visible, message, showOk, onOk }) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => { }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.loadingBox, { alignItems: 'center' }]}>
+          <Text style={styles.loadingText}>{message}</Text>
+          {showOk ? (
+            <TouchableOpacity style={styles.okButton} onPress={onOk}>
+              <Text style={styles.okButtonText}>OK</Text>
+            </TouchableOpacity>
+          ) : (
+            <ActivityIndicator size="large" color="#2667ff" style={{ marginTop: 10 }} />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 function SplashScreen() {
   const [fontsLoaded, setFontsLoaded] = React.useState(false);
@@ -26,9 +88,19 @@ function SplashScreen() {
   const slideAnim = React.useRef(new Animated.Value(0)).current; // translateX
 
   React.useEffect(() => {
-    Font.loadAsync({
-      'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
-    }).then(() => setFontsLoaded(true));
+    const loadFonts = async () => {
+      try {
+        await Font.loadAsync({
+          'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
+        });
+        setFontsLoaded(true);
+      } catch (error) {
+        console.warn('Error loading fonts:', error);
+        // Fallback to default font if loading fails
+        setFontsLoaded(true);
+      }
+    };
+    loadFonts();
   }, []);
 
   React.useEffect(() => {
@@ -40,9 +112,9 @@ function SplashScreen() {
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: -400, // slide left
-          duration: 500,
-          delay: 400,
+          toValue: -1000, // slide left
+          duration: 1000,
+          delay: 600,
           useNativeDriver: true,
         }),
       ]).start();
@@ -51,20 +123,93 @@ function SplashScreen() {
 
   if (!fontsLoaded) return null;
   return (
-    <View style={{ flex: 1, backgroundColor: '#2667ff', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#ffff', justifyContent: 'center', alignItems: 'center' }}>
       <Animated.Text
         style={{
           fontFamily: 'Outfit-Bold',
-          fontSize: 54,
-          color: '#fff',
-          letterSpacing: 2,
+          fontSize: 40,
+          color: '#2677ff',
           opacity: appearAnim,
           transform: [{ translateX: slideAnim }],
         }}
       >
-        CamPulse
+        Safire
       </Animated.Text>
+      <ActivityIndicator size="large" color="black" style={{ marginTop: 40 }} />
+      <Text style={{ color: 'black', fontFamily: 'Outfit-Bold', fontSize: 18, marginTop: 10 }}>Please wait...</Text>
     </View>
+  );
+}
+
+function AccountSetupScreen({ navigation, route }) {
+  const { email } = route.params || {};
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [address, setAddress] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [profilePic, setProfilePic] = useState(null);
+  const [coverPhoto, setCoverPhoto] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const pickImage = async (setter) => {
+    let result = await launchImageLibraryAsync({
+      mediaTypes: MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setter(result.assets[0].uri);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const user = getAuth().currentUser;
+      if (!user) throw new Error('No user logged in');
+      await setDoc(doc(getFirestore(), 'users', user.uid), {
+        name,
+        username,
+        mobile,
+        address,
+        studentId,
+        birthday,
+        email: user.email,
+        profilePic,
+        coverPhoto,
+      });
+      setLoading(false);
+      navigation.replace('Home', { goToAccount: true });
+    } catch (e) {
+      setLoading(false);
+      alert('Failed to save account info: ' + e.message);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <Text style={styles.title}>Account Setup</Text>
+      <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
+      <TextInput style={styles.input} placeholder="Username" value={username} onChangeText={setUsername} />
+      <TextInput style={styles.input} placeholder="Birthday (YYYY-MM-DD)" value={birthday} onChangeText={setBirthday} />
+      <TextInput style={styles.input} placeholder="Mobile Number" value={mobile} onChangeText={setMobile} keyboardType="phone-pad" />
+      <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
+      <TextInput style={styles.input} placeholder="Student ID" value={studentId} onChangeText={setStudentId} />
+      <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setProfilePic)}>
+        <Text style={styles.nextButtonText}>{profilePic ? 'Change Profile Picture' : 'Select Profile Picture'}</Text>
+      </TouchableOpacity>
+      {profilePic && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Profile picture selected</Text>}
+      <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setCoverPhoto)}>
+        <Text style={styles.nextButtonText}>{coverPhoto ? 'Change Cover Photo' : 'Select Cover Photo'}</Text>
+      </TouchableOpacity>
+      {coverPhoto && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Cover photo selected</Text>}
+      <TouchableOpacity style={styles.nextButton} onPress={handleSubmit} disabled={loading}>
+        <Text style={styles.nextButtonText}>{loading ? 'Saving...' : 'Finish Setup'}</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
@@ -80,6 +225,9 @@ function LoginScreen({ navigation }) {
   });
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [showOk, setShowOk] = useState(false);
 
   useEffect(() => {
     Font.loadAsync({
@@ -116,26 +264,55 @@ function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
+    setLoading(true);
+    setLoadingMessage('Please wait');
+    setShowOk(false);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('Logged in:', userCredential.user);
-      showModal('Login successful!', () => navigation.replace('Home'));
+      // If this is a new user, go to AccountSetupScreen
+      if (userCredential.user && userCredential.user.metadata.creationTime === userCredential.user.metadata.lastSignInTime) {
+        setLoading(false);
+        navigation.replace('AccountSetup', { email: userCredential.user.email });
+      } else {
+        setLoadingMessage('Login successful!');
+        setTimeout(() => {
+          setLoading(false);
+          navigation.replace('Home');
+        }, 1200);
+      }
     } catch (error) {
+      setLoading(false);
       alert(error.message);
     }
   };
   const handleSignUp = async () => {
+    setLoading(true);
+    setLoadingMessage('Creating your account...');
+    setShowOk(false);
     try {
+      // Create user with email and password
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      console.log('Signed up:', userCredential.user);
-      showModal('Sign up successful!', () => navigation.replace('Home'));
+      
+      // Show success message
+      setLoadingMessage('Account Created Successfully!');
+      setShowOk(true);
+      
     } catch (error) {
+      setLoading(false);
       alert(error.message);
     }
+  };
+  const handleOk = () => {
+    setLoading(false);
+    setShowOk(false);
+    setIsSignUp(false); // Switch to login form after account creation
+    setEmail('');
+    setPassword('');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <LoadingModal visible={loading} message={loadingMessage} showOk={showOk} onOk={handleOk} />
       <Modal
         visible={modalVisible}
         transparent
@@ -148,50 +325,62 @@ function LoginScreen({ navigation }) {
           </View>
         </Pressable>
       </Modal>
-      <View style={styles.container}>
-        <Text style={styles.brand}>CamPulse</Text>
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={isSignUp ? handleSignUp : handleLogin}
-          >
-            <Text style={styles.loginButtonText}>{isSignUp ? 'Sign Up' : 'Log In'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.loginButton, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#2667ff', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}
-            onPress={() => promptAsync()}
-          >
-            <Text style={[styles.loginButtonText, { color: '#2667ff' }]}>Sign in with Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
-            <Text style={styles.forgotText}>
-              {isSignUp ? 'Already have an account? Log In' : "Don't have an account? Sign Up"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Text style={styles.forgotText}>Forgot Password?</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Brand */}
+      <Text style={styles.brandGreen}>Safire</Text>
+      {/* Title */}
+      <Text style={styles.title}>{isSignUp ? 'Sign up to Safire' : 'Sign in to Safire'}</Text>
+      {/* Google Sign In Button */}
+      <TouchableOpacity
+        style={styles.socialButton}
+        onPress={() => promptAsync()}
+      >
+        <FontAwesome name="google" size={22} color="#EA4335" style={{ marginRight: 10 }} />
+        <Text style={styles.socialButtonText}>Sign in with Google</Text>
+      </TouchableOpacity>
+      {/* Divider */}
+      <View style={styles.dividerRow}>
+        <View style={styles.divider} />
+        <Text style={styles.orDividerText}>or</Text>
+        <View style={styles.divider} />
+      </View>
+      {/* Email/Password Form */}
+      {/* Input Fields */}
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        placeholderTextColor="#999"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        placeholderTextColor="#999"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+      {/* Main Action Button */}
+      <TouchableOpacity
+        style={styles.nextButton}
+        onPress={isSignUp ? handleSignUp : handleLogin}
+      >
+        <Text style={styles.nextButtonText}>{isSignUp ? 'Sign Up' : 'Next'}</Text>
+      </TouchableOpacity>
+      {/* Forgot Password Button */}
+      <TouchableOpacity style={styles.forgotButton} onPress={() => { }}>
+        <Text style={styles.forgotBoldText}>Forgot Password?</Text>
+      </TouchableOpacity>
+      {/* Switch between Log In and Sign Up */}
+      <View style={styles.switchRow}>
+        <Text style={styles.infoText}>
+          {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+        </Text>
+        <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
+          <Text style={styles.switchText}>{isSignUp ? 'Log In' : 'Sign Up'}</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -205,13 +394,25 @@ export default function App() {
     const timer = setTimeout(() => setShowSplash(false), 1800);
     return () => clearTimeout(timer);
   }, []);
-  if (showSplash) return <SplashScreen />;
+  if (showSplash) {
+    return <SplashScreen />;
+  }
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
-      </Stack.Navigator>
+      <UserProvider>
+        <Stack.Navigator
+          initialRouteName="Login"
+          screenOptions={{
+            headerShown: false,
+            gestureEnabled: true,
+            cardOverlayEnabled: true,
+          }}
+        >
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="AccountSetup" component={AccountSetupScreen} />
+          <Stack.Screen name="Home" component={HomeScreen} />
+        </Stack.Navigator>
+      </UserProvider>
     </NavigationContainer>
   );
 }
@@ -219,85 +420,196 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#2667ff', // Facebook blue
+    backgroundColor: '#f5f8fa', // Twitter's background
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    paddingTop: 150,
-    paddingHorizontal: 20,
-  },
-  brand: {
-    fontFamily: 'Outfit-Bold',
-    fontSize: 48,
-    marginBottom: 20,
-    color: 'white',
-    textAlign: 'center',
-  },
-  formContainer: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    fontFamily: 'Outfit-Regular',
-  },
-  input: {
-    height: 50,
-    borderColor: '#ddd',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    fontFamily: 'Outfit-Bold',
-  },
-  loginButton: {
-    backgroundColor: '#2667ff',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-    fontFamily: 'Outfit-Bold',
-  },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 19,
-    fontFamily: 'Outfit-Bold',
-  },
-  forgotText: {
-    textAlign: 'center',
-    color: '#black',
-    fontSize: 14,
-    marginTop: 5,
-    fontFamily: 'Outfit-Regular',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalBox: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingVertical: 28,
-    paddingHorizontal: 36,
+  loadingBox: {
+    width: 300,
+    padding: 20,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  loadingText: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 16,
+    color: '#333333',
+    textAlign: 'center',
+  },
+  okButton: {
+    marginTop: 10,
+    backgroundColor: '#2677ff',
+    borderRadius: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  okButtonText: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 16,
+    color: '#ffffff',
+  },
+  brandGreen: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 28,
+    color: '#2667ff',
+    textAlign: 'center',
+    marginTop: 150,
+    marginBottom: 8,
+  },
+  title: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 22,
+    color: '#222',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  input: {
+    height: 50,
+    borderColor: '#e6ecf0',
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    fontSize: 15,
+    backgroundColor: '#fff',
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    fontFamily: 'Outfit-Regular',
+  },
+  nextButton: {
+    backgroundColor: '#222',
+    borderRadius: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    shadowColor: '#222',
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  nextButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Outfit-Bold',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e6ecf0',
+    borderRadius: 22,
+    paddingVertical: 12,
+    marginBottom: 10,
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+  },
+  socialButtonText: {
+    color: '#222',
+    fontFamily: 'Outfit-Bold',
+    fontSize: 15,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 8,
+    justifyContent: 'center',
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e6ecf0',
+    marginHorizontal: 8,
+  },
+  orDividerText: {
+    color: '#8899a6',
+    fontFamily: 'Outfit-Bold',
+    fontSize: 13,
+  },
+  forgotButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e6ecf0',
+    borderRadius: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 2,
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    shadowColor: '#2667ff',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  forgotBoldText: {
+    color: '#222',
+    fontFamily: 'Outfit-Bold',
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 18,
+  },
+  infoText: {
+    textAlign: 'center',
+    color: '#657786',
+    fontSize: 13,
+    fontFamily: 'Outfit-Light',
+    marginBottom: 0,
+  },
+  switchText: {
+    textAlign: 'center',
+    color: '#2667ff',
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
+    marginBottom: 0,
+    marginLeft: 2,
+  },
+  modalBox: {
+    width: 280,
+    padding: 20,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalText: {
-    fontFamily: 'Outfit-Bold',
-    fontSize: 20,
-    color: '#2667ff',
+    fontFamily: 'Outfit-Regular',
+    fontSize: 16,
+    color: '#333333',
     textAlign: 'center',
   },
 });
