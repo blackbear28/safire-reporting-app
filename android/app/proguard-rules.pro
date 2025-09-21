@@ -10,5 +10,17 @@
 # react-native-reanimated
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
+# react-native-gesture-handler
+-keep class com.swmansion.gesturehandler.** { *; }
+# react-native-screens
+-keep class com.swmansion.rnscreens.** { *; }
+# react-native-safe-area-context
+-keep class com.th3rdwave.safeareacontext.** { *; }
+# react-native-pager-view
+-keep class com.reactnativepagerview.** { *; }
+# @react-native-community/netinfo
+-keep class com.reactnativecommunity.netinfo.** { *; }
+# @react-native-async-storage/async-storage
+-keep class com.reactnativecommunity.asyncstorage.** { *; }
 
 # Add any project specific keep options here:

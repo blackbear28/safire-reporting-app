@@ -10,11 +10,13 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile } from 'firebase/auth';
 import { auth } from './firebase';
-import { useUser } from './contexts/UserContext';
+import { useUser } from './App';
 
 export default function EditProfile({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { user: userData, updateUser } = useUser();
   const [formData, setFormData] = useState({
     name: userData?.name || '',
@@ -64,10 +66,10 @@ export default function EditProfile({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20) }}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -122,7 +124,7 @@ export default function EditProfile({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

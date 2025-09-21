@@ -20,6 +20,7 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
+  getAuth,
 } from 'firebase/auth';
 import {
   collection,
@@ -30,32 +31,66 @@ import {
   doc,
   updateDoc,
   getDoc,
-  deleteDoc
+  deleteDoc,
+  setDoc,
+  getFirestore
 } from 'firebase/firestore';
 import { launchImageLibraryAsync, MediaTypeOptions } from 'expo-image-picker';
-import * as Google from 'expo-auth-session/providers/google';
-import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCPyTC1B3bM14a7OcCaTSnKebKOh1Ntt-Y",
-  authDomain: "campulse-8c50e.firebaseapp.com",
-  projectId: "campulse-8c50e",
-  storageBucket: "campulse-8c50e.appspot.com",
-  messagingSenderId: "244725080770",
-  appId: "1:244725080770:web:9ab35ae367ffecbf92515b",
-  measurementId: "G-T4GWKP6WKQ"
-};
-
-// Initialize Firebase
-// const app = initializeApp(firebaseConfig);
-// const auth = getAuth(app);
-// const db = getFirestore(app);
+// Remove Google Auth imports - causing crashes on some devices
+// import * as Google from 'expo-auth-session/providers/google';
+// import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { UserProvider } from './contexts/UserContext';
+import { SafeNavigationFallback } from './components/SafeNavigationFallback';
+
+// Gesture handler error boundary for better crash handling
+class GestureHandlerErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    // Check if this is a gesture handler related error
+    if (error?.message?.includes('RNGestureHandlerModule') || 
+        error?.message?.includes('TurboModuleRegistry') ||
+        error?.message?.includes('main has not been registered') ||
+        error?.stack?.includes('gesturehandler')) {
+      return { hasError: true, error };
+    }
+    return null;
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Navigation/Gesture Handler Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeNavigationFallback 
+          onRetry={() => {
+            this.setState({ hasError: false, error: null });
+            // Try to recover by reloading
+            if (typeof this.props.onRestart === 'function') {
+              this.props.onRestart();
+            }
+          }}
+        />
+      );
+    }
+
+    return this.props.children;
+  }
+}
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './HomeScreen';
+import ReportScreen from './ReportScreen';
+import DashboardScreen from './DashboardScreen';
+import ChatScreen from './ChatScreen';
+import PostDetailScreen from './PostDetailScreen';
+import EditProfile from './EditProfile';
 import { FontAwesome } from '@expo/vector-icons';
 
 function LoadingModal({ visible, message, showOk, onOk }) {
@@ -84,8 +119,8 @@ function LoadingModal({ visible, message, showOk, onOk }) {
 
 function SplashScreen() {
   const [fontsLoaded, setFontsLoaded] = React.useState(false);
-  const appearAnim = React.useRef(new Animated.Value(0)).current; // opacity
-  const slideAnim = React.useRef(new Animated.Value(0)).current; // translateX
+  const appearAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     const loadFonts = async () => {
@@ -95,8 +130,7 @@ function SplashScreen() {
         });
         setFontsLoaded(true);
       } catch (error) {
-        console.warn('Error loading fonts:', error);
-        // Fallback to default font if loading fails
+        console.warn('Error loading fonts, using system fonts:', error);
         setFontsLoaded(true);
       }
     };
@@ -112,7 +146,7 @@ function SplashScreen() {
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: -1000, // slide left
+          toValue: -1000,
           duration: 1000,
           delay: 600,
           useNativeDriver: true,
@@ -121,9 +155,18 @@ function SplashScreen() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 40, color: '#2677ff', fontWeight: 'bold' }}>Safire</Text>
+        <ActivityIndicator size="large" color="black" style={{ marginTop: 40 }} />
+        <Text style={{ color: 'black', fontSize: 18, marginTop: 10, fontWeight: 'bold' }}>Please wait...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffff', justifyContent: 'center', alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
       <Animated.Text
         style={{
           fontFamily: 'Outfit-Bold',
@@ -136,7 +179,14 @@ function SplashScreen() {
         Safire
       </Animated.Text>
       <ActivityIndicator size="large" color="black" style={{ marginTop: 40 }} />
-      <Text style={{ color: 'black', fontFamily: 'Outfit-Bold', fontSize: 18, marginTop: 10 }}>Please wait...</Text>
+      <Text style={{ 
+        color: 'black', 
+        fontFamily: 'Outfit-Bold', 
+        fontSize: 18, 
+        marginTop: 10 
+      }}>
+        Please wait...
+      </Text>
     </View>
   );
 }
@@ -170,7 +220,7 @@ function AccountSetupScreen({ navigation, route }) {
     try {
       const user = getAuth().currentUser;
       if (!user) throw new Error('No user logged in');
-      await setDoc(doc(getFirestore(), 'users', user.uid), {
+      await setDoc(doc(db, 'users', user.uid), {
         name,
         username,
         mobile,
@@ -218,11 +268,8 @@ function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: '517763926129-q3udh8fbt5d31k35m8gsjfdh723ed05e.apps.googleusercontent.com',
-    androidClientId: '517763926129-ckgq6gt2asd3n355tl1u5ia7joc8gd1h.apps.googleusercontent.com',
-    // iosClientId: '', // You can add this later if needed
-  });
+  // Remove Google Auth - causing crashes
+  // const [authError, setAuthError] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -230,28 +277,35 @@ function LoginScreen({ navigation }) {
   const [showOk, setShowOk] = useState(false);
 
   useEffect(() => {
-    Font.loadAsync({
-      'Outfit-Regular': require('./assets/fonts/Outfit-Regular.ttf'),
-      'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
-      'Outfit-Light': require('./assets/fonts/Outfit-Light.ttf'),
-    }).then(() => setFontsLoaded(true));
+    const loadFonts = async () => {
+      try {
+        await Font.loadAsync({
+          'Outfit-Regular': require('./assets/fonts/Outfit-Regular.ttf'),
+          'Outfit-Bold': require('./assets/fonts/Outfit-Bold.ttf'),
+          'Outfit-Light': require('./assets/fonts/Outfit-Light.ttf'),
+        });
+        setFontsLoaded(true);
+      } catch (error) {
+        console.warn('Font loading failed, using system fonts:', error);
+        // Always set to true so app doesn't get stuck
+        setFontsLoaded(true);
+      }
+    };
+    loadFonts();
   }, []);
 
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      signInWithCredential(auth, credential)
-        .then((userCredential) => {
-          // Google sign-in success
-          console.log('Google user:', userCredential.user);
-        })
-        .catch((error) => alert(error.message));
-    }
-  }, [response]);
+  // Remove Google Auth response handler - causing crashes
+  // useEffect(() => { ... }, [response]);
 
   if (!fontsLoaded) {
-    return null;
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#2667ff" />
+          <Text style={{ marginTop: 10, fontSize: 16 }}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   const showModal = (message, callback) => {
@@ -269,8 +323,13 @@ function LoginScreen({ navigation }) {
     setShowOk(false);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // If this is a new user, go to AccountSetupScreen
-      if (userCredential.user && userCredential.user.metadata.creationTime === userCredential.user.metadata.lastSignInTime) {
+      
+      // Check if user has completed profile setup
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (!userDocSnap.exists() || !userDocSnap.data().name) {
+        // User hasn't completed profile setup
         setLoading(false);
         navigation.replace('AccountSetup', { email: userCredential.user.email });
       } else {
@@ -293,9 +352,9 @@ function LoginScreen({ navigation }) {
       // Create user with email and password
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Show success message
-      setLoadingMessage('Account Created Successfully!');
-      setShowOk(true);
+      // Redirect to account setup
+      setLoading(false);
+      navigation.replace('AccountSetup', { email: userCredential.user.email });
       
     } catch (error) {
       setLoading(false);
@@ -305,9 +364,7 @@ function LoginScreen({ navigation }) {
   const handleOk = () => {
     setLoading(false);
     setShowOk(false);
-    setIsSignUp(false); // Switch to login form after account creation
-    setEmail('');
-    setPassword('');
+    // Don't switch to login form here since we're redirecting to AccountSetup
   };
 
   return (
@@ -329,21 +386,8 @@ function LoginScreen({ navigation }) {
       <Text style={styles.brandGreen}>Safire</Text>
       {/* Title */}
       <Text style={styles.title}>{isSignUp ? 'Sign up to Safire' : 'Sign in to Safire'}</Text>
-      {/* Google Sign In Button */}
-      <TouchableOpacity
-        style={styles.socialButton}
-        onPress={() => promptAsync()}
-      >
-        <FontAwesome name="google" size={22} color="#EA4335" style={{ marginRight: 10 }} />
-        <Text style={styles.socialButtonText}>Sign in with Google</Text>
-      </TouchableOpacity>
-      {/* Divider */}
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.orDividerText}>or</Text>
-        <View style={styles.divider} />
-      </View>
-      {/* Email/Password Form */}
+      
+      {/* Email/Password Form - No Google Auth */}
       {/* Input Fields */}
       <TextInput
         style={styles.input}
@@ -388,32 +432,195 @@ function LoginScreen({ navigation }) {
 
 const Stack = createStackNavigator();
 
+// Error boundary component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('App crashed:', error, errorInfo);
+    // Log device info for debugging
+    console.error('Device crash - possibly Realme 6i compatibility issue');
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Something went wrong</Text>
+          <Text style={{ textAlign: 'center', marginBottom: 20 }}>
+            The app encountered an error. Please restart the application.
+          </Text>
+          <TouchableOpacity 
+            style={{ backgroundColor: '#2667ff', padding: 10, borderRadius: 5 }}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={{ color: 'white' }}>Try Again</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Proper UserProvider with auth state management
+const UserContext = React.createContext();
+
+const AuthUserProvider = ({ children }) => {
+  const [user, setUser] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Fetch additional user data from Firestore
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          let userData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          };
+
+          if (userDocSnap.exists()) {
+            // Merge Firestore data with Auth data
+            userData = { ...userData, ...userDocSnap.data() };
+          }
+
+          setUser(userData);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Fall back to basic auth data
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          });
+        }
+      } else {
+        // User is signed out
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe(); // Cleanup subscription
+  }, []);
+
+  const contextValue = {
+    user: user,
+    loading,
+    clearUserData: () => {
+      setUser(null);
+    },
+    signOut: async () => {
+      try {
+        await signOut(auth);
+        setUser(null);
+      } catch (error) {
+        console.error('Sign out error:', error);
+      }
+    }
+  };
+
+  return (
+    <UserContext.Provider value={contextValue}>
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+// Export the useUser hook
+export const useUser = () => {
+  const context = React.useContext(UserContext);
+  if (!context) {
+    throw new Error('useUser must be used within a UserProvider');
+  }
+  return context;
+};
+
 export default function App() {
   const [showSplash, setShowSplash] = React.useState(true);
+  const [appError, setAppError] = React.useState(null);
+  
   React.useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 1800);
+    const timer = setTimeout(() => {
+      try {
+        setShowSplash(false);
+      } catch (error) {
+        console.error('Error during splash transition:', error);
+        setAppError(error);
+      }
+    }, 1800);
     return () => clearTimeout(timer);
   }, []);
+  
+  if (appError) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>App Error</Text>
+        <Text style={{ textAlign: 'center', marginBottom: 20 }}>
+          {appError.message || 'Something went wrong during startup'}
+        </Text>
+        <TouchableOpacity 
+          style={{ backgroundColor: '#2667ff', padding: 10, borderRadius: 5 }}
+          onPress={() => setAppError(null)}
+        >
+          <Text style={{ color: 'white' }}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+  
   if (showSplash) {
     return <SplashScreen />;
   }
   return (
-    <NavigationContainer>
-      <UserProvider>
-        <Stack.Navigator
-          initialRouteName="Login"
-          screenOptions={{
-            headerShown: false,
-            gestureEnabled: true,
-            cardOverlayEnabled: true,
-          }}
-        >
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="AccountSetup" component={AccountSetupScreen} />
-          <Stack.Screen name="Home" component={HomeScreen} />
-        </Stack.Navigator>
-      </UserProvider>
-    </NavigationContainer>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <GestureHandlerErrorBoundary onRestart={() => setAppError(null)}>
+          <NavigationContainer>
+            <AuthUserProvider>
+              <Stack.Navigator
+                initialRouteName="Login"
+                screenOptions={{
+                  headerShown: false,
+                  gestureEnabled: true,
+                  cardOverlayEnabled: true,
+                }}
+              >
+                <Stack.Screen 
+                  name="Login" 
+                  component={LoginScreen}
+                  options={{
+                    gestureEnabled: false, // Prevent swipe back on login
+                  }}
+                />
+                <Stack.Screen name="AccountSetup" component={AccountSetupScreen} />
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="Report" component={ReportScreen} />
+                <Stack.Screen name="Dashboard" component={DashboardScreen} />
+                <Stack.Screen name="Chat" component={ChatScreen} />
+                <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+                <Stack.Screen name="EditProfile" component={EditProfile} />
+              </Stack.Navigator>
+            </AuthUserProvider>
+          </NavigationContainer>
+        </GestureHandlerErrorBoundary>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

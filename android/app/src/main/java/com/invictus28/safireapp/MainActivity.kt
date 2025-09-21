@@ -1,4 +1,4 @@
-package com.invictus28.campulseapp
+package com.invictus28.safireapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

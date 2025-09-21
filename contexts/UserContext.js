@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { View, Text } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import SafeAsyncStorage from '../utils/SafeAsyncStorage';
 import { auth, db } from '../firebase';
 import {
   onAuthStateChanged,
@@ -67,7 +67,7 @@ export const UserProvider = ({ children }) => {
           }
           // Try to load cached data first for better UX
           try {
-            const cachedUser = await AsyncStorage.getItem('userData');
+            const cachedUser = await SafeAsyncStorage.getItem('userData');
             if (cachedUser) {
               console.log('Using cached user data');
               setUser(JSON.parse(cachedUser));
@@ -154,7 +154,7 @@ export const UserProvider = ({ children }) => {
 
                   // Cache user data
                   try {
-                    await AsyncStorage.setItem('userData', JSON.stringify(userData));
+                    await SafeAsyncStorage.setItem('userData', JSON.stringify(userData));
                   } catch (storageError) {
                     console.warn('Failed to cache user data:', storageError.message);
                   }
@@ -172,7 +172,7 @@ export const UserProvider = ({ children }) => {
                   console.log('No user signed in');
                   setUser(null);
                   try {
-                    await AsyncStorage.removeItem('userData');
+                    await SafeAsyncStorage.removeItem('userData');
                   } catch (e) {
                     console.warn('Failed to clear cached user data:', e.message);
                   } finally {
@@ -189,7 +189,7 @@ export const UserProvider = ({ children }) => {
                 if (error.code === 'auth/network-request-failed' || error.code === 'unavailable') {
                   console.log('Network error - trying to use cached data');
                   try {
-                    const cachedUser = await AsyncStorage.getItem('userData');
+                    const cachedUser = await SafeAsyncStorage.getItem('userData');
                     if (cachedUser) {
                       console.log('Using cached user data');
                       setUser(JSON.parse(cachedUser));
@@ -315,7 +315,8 @@ export const UserProvider = ({ children }) => {
 
       try {
         // Clear any cached data
-        await AsyncStorage.multiRemove(['userData', 'authToken']);
+        await SafeAsyncStorage.removeItem('userData');
+        await SafeAsyncStorage.removeItem('authToken');
         console.log(' Cleared local storage data');
       } catch (storageError) {
         console.warn(' Failed to clear local storage:', storageError);
@@ -337,7 +338,7 @@ export const UserProvider = ({ children }) => {
       }
 
       // Clear local storage
-      await AsyncStorage.multiRemove(['userData']);
+      await SafeAsyncStorage.removeItem('userData');
 
       // Reset state
       setUser(null);
