@@ -16,15 +16,63 @@ import {
   increment,
   getDoc
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 
 export class ReportService {
+  
+  // Upload images to Firebase Storage
+  static async uploadImages(images) {
+    try {
+      const imageUrls = [];
+      
+      for (let i = 0; i < images.length; i++) {
+        const imageUri = images[i];
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        
+        // Create a unique filename
+        const timestamp = Date.now();
+        const filename = `reports/${timestamp}_${i}.jpg`;
+        const storageRef = ref(storage, filename);
+        
+        // Upload the file
+        await uploadBytes(storageRef, blob);
+        
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        imageUrls.push(downloadURL);
+      }
+      
+      return { success: true, urls: imageUrls };
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      return { success: false, error: error.message };
+    }
+  }
   
   // Submit a new report
   static async submitReport(reportData) {
     try {
+      // TEMPORARILY DISABLED: Upload images if any
+      // TODO: Enable when Firebase Storage is set up with Blaze plan
+      let imageUrls = [];
+      /*
+      if (reportData.media && reportData.media.length > 0) {
+        const uploadResult = await this.uploadImages(reportData.media);
+        if (uploadResult.success) {
+          imageUrls = uploadResult.urls;
+        } else {
+          console.warn('Failed to upload images:', uploadResult.error);
+        }
+      }
+      */
+      
       const report = {
         ...reportData,
+        media: imageUrls, // Empty for now - will store URLs when Storage is enabled
+        authorUsername: reportData.authorUsername || reportData.authorEmail || 'user',
+        authorEmail: reportData.authorEmail || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         status: 'pending',
@@ -68,6 +116,93 @@ export class ReportService {
           error: `Error: ${error.message}` 
         };
       }
+    }
+  }
+
+  // Update an existing report (within 15 minutes of creation)
+  static async updateReport(reportId, reportData) {
+    try {
+      const reportRef = doc(db, 'reports', reportId);
+      
+      // Get the current report to check creation time
+      const reportSnap = await getDoc(reportRef);
+      if (!reportSnap.exists()) {
+        return { success: false, error: 'Report not found' };
+      }
+      
+      const currentReport = reportSnap.data();
+      const now = new Date();
+      const createdAt = currentReport.createdAt?.toDate ? currentReport.createdAt.toDate() : new Date();
+      const diffInMinutes = (now - createdAt) / (1000 * 60);
+      
+      // Check if within 15 minutes
+      if (diffInMinutes > 15) {
+        return { success: false, error: 'Edit time has expired. Reports can only be edited within 15 minutes.' };
+      }
+      
+      const updatedReport = {
+        title: reportData.title,
+        description: reportData.description,
+        category: reportData.category,
+        priority: reportData.priority,
+        department: reportData.department,
+        location: reportData.location,
+        anonymous: reportData.anonymous,
+        sentimentScore: reportData.sentimentScore,
+        emotion: reportData.emotion,
+        tags: reportData.tags,
+        slaDeadline: reportData.slaDeadline,
+        updatedAt: serverTimestamp()
+      };
+
+      await updateDoc(reportRef, updatedReport);
+      console.log('Report updated successfully:', reportId);
+      
+      return { success: true, id: reportId };
+    } catch (error) {
+      console.error('Error updating report:', error);
+      
+      if (error.code === 'permission-denied') {
+        return { 
+          success: false, 
+          error: 'Permission denied. You can only edit your own reports.' 
+        };
+      } else if (error.code === 'unauthenticated') {
+        return { 
+          success: false, 
+          error: 'User not authenticated. Please log in again.' 
+        };
+      } else {
+        return { 
+          success: false, 
+          error: `Error: ${error.message}` 
+        };
+      }
+    }
+  }
+
+  // Get a single report by ID
+  static async getReportById(reportId) {
+    try {
+      const reportRef = doc(db, 'reports', reportId);
+      const reportSnap = await getDoc(reportRef);
+      
+      if (!reportSnap.exists()) {
+        return { success: false, error: 'Report not found' };
+      }
+      
+      const reportData = reportSnap.data();
+      const report = {
+        id: reportSnap.id,
+        ...reportData,
+        createdAt: reportData.createdAt?.toDate ? reportData.createdAt.toDate() : new Date(),
+        updatedAt: reportData.updatedAt?.toDate ? reportData.updatedAt.toDate() : new Date()
+      };
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error getting report:', error);
+      return { success: false, error: error.message };
     }
   }
 

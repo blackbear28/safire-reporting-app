@@ -21,16 +21,24 @@ export default function EditProfile({ navigation }) {
   const [formData, setFormData] = useState({
     name: userData?.name || '',
     email: userData?.email || '',
-    bio: userData?.bio || ''
+    studentId: userData?.studentId || '',
+    birthday: userData?.birthday || '',
+    mobile: userData?.mobile || '',
+    address: userData?.address || '',
+    about: userData?.about || ''
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (userData) {
       setFormData({
-        name: userData.name,
-        email: userData.email,
-        bio: userData.bio || ''
+        name: userData.name || '',
+        email: userData.email || '',
+        studentId: userData.studentId || '',
+        birthday: userData.birthday || '',
+        mobile: userData.mobile || '',
+        address: userData.address || '',
+        about: userData.about || ''
       });
     }
   }, [userData]);
@@ -51,10 +59,14 @@ export default function EditProfile({ navigation }) {
         displayName: formData.name
       });
 
-      // Update local user data
+      // Update local user data with all fields
       await updateUser({
         name: formData.name,
-        bio: formData.bio
+        studentId: formData.studentId,
+        birthday: formData.birthday,
+        mobile: formData.mobile,
+        address: formData.address,
+        about: formData.about
       });
 
       navigation.goBack();
@@ -80,31 +92,73 @@ export default function EditProfile({ navigation }) {
 
         <View style={[styles.formContainer, { paddingBottom: 20 }]}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>Email (GSuite Account)</Text>
             <TextInput
-              style={styles.input}
-              value={formData.name}
-              onChangeText={(text) => handleChange('name', text)}
-              placeholder="Enter your name"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: '#e8e8e8', color: '#666' }]}
               value={formData.email}
               editable={false}
               placeholder="Email"
             />
+            <Text style={styles.helperText}>Your GSuite email cannot be changed</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Bio</Text>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.name}
+              onChangeText={(text) => handleChange('name', text)}
+              placeholder="Enter your full name"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Student ID</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.studentId}
+              onChangeText={(text) => handleChange('studentId', text)}
+              placeholder="Enter your student ID"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Birthday</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.birthday}
+              onChangeText={(text) => handleChange('birthday', text)}
+              placeholder="YYYY-MM-DD"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Mobile Number</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.mobile}
+              onChangeText={(text) => handleChange('mobile', text)}
+              placeholder="Enter your mobile number"
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Address</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.address}
+              onChangeText={(text) => handleChange('address', text)}
+              placeholder="Enter your address"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>About</Text>
             <TextInput
               style={[styles.input, styles.bioInput]}
-              value={formData.bio}
-              onChangeText={(text) => handleChange('bio', text)}
+              value={formData.about}
+              onChangeText={(text) => handleChange('about', text)}
               placeholder="Tell us about yourself"
               multiline
               numberOfLines={4}
@@ -159,6 +213,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit-Bold',
     color: '#333',
     marginBottom: 5,
+  },
+  helperText: {
+    fontFamily: 'Outfit-Regular',
+    fontSize: 12,
+    color: '#999',
+    marginTop: 5,
   },
   input: {
     backgroundColor: '#f5f5f5',

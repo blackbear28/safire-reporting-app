@@ -2,6 +2,22 @@
 
 A comprehensive school incident reporting system with **React Native mobile app** and **React web admin panel**. Built with Expo, Firebase, and Material-UI for modern school administration.
 
+## 🚨 **QUICK TROUBLESHOOTING**
+
+**❗ Most Common Issue: "Package.json not found"**
+
+If you get this error when running `expo start`:
+```
+Configuration Error: The expected package.json path: [path]\package.json does not exist
+```
+
+**Solution:** You're in the wrong directory! 
+1. Navigate to the folder that contains `App.js` and `package.json`
+2. **Windows users:** Double-click `start-mobile-app.bat` for automatic setup
+3. **Or manually:** Run `cd "safire-app - Copy"` then `expo start`
+
+📖 **See `TROUBLESHOOTING_SETUP.md` for complete setup solutions**
+
 ## 📱 **Mobile App Features**
 
 - **User Authentication** - Secure login/register with Firebase Auth

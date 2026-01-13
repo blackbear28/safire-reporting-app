@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as Font from 'expo-font';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -13,6 +14,8 @@ import {
   Pressable,
   Animated,
   ActivityIndicator,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { auth, db } from './firebase';
 import {
@@ -21,6 +24,10 @@ import {
   onAuthStateChanged,
   signOut,
   getAuth,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  fetchSignInMethodsForEmail,
 } from 'firebase/auth';
 import {
   collection,
@@ -194,14 +201,30 @@ function SplashScreen() {
 function AccountSetupScreen({ navigation, route }) {
   const { email } = route.params || {};
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
   const [mobile, setMobile] = useState('');
   const [address, setAddress] = useState('');
+  const [about, setAbout] = useState('');
   const [studentId, setStudentId] = useState('');
   const [birthday, setBirthday] = useState('');
   const [profilePic, setProfilePic] = useState(null);
   const [coverPhoto, setCoverPhoto] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-populate name from email when component loads
+  React.useEffect(() => {
+    const user = getAuth().currentUser;
+    if (user) {
+      // Extract name from email (before @)
+      const emailName = user.email.split('@')[0];
+      // Capitalize first letter and replace dots/underscores with spaces
+      const formattedName = emailName
+        .replace(/[._]/g, ' ')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      setName(formattedName);
+    }
+  }, []);
 
   const pickImage = async (setter) => {
     let result = await launchImageLibraryAsync({
@@ -220,16 +243,29 @@ function AccountSetupScreen({ navigation, route }) {
     try {
       const user = getAuth().currentUser;
       if (!user) throw new Error('No user logged in');
+      
+      // Validate required fields
+      if (!name.trim()) {
+        Alert.alert('Error', 'Name is required');
+        setLoading(false);
+        return;
+      }
+      
       await setDoc(doc(db, 'users', user.uid), {
         name,
-        username,
+        username: user.email, // Username is now the email address
         mobile,
         address,
+        about,
         studentId,
         birthday,
         email: user.email,
         profilePic,
         coverPhoto,
+        accountStatus: 'active',
+        school: 'Cor Jesu College',
+        verifiedStudent: true,
+        createdAt: new Date(),
       });
       setLoading(false);
       navigation.replace('Home', { goToAccount: true });
@@ -241,24 +277,56 @@ function AccountSetupScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Text style={styles.title}>Account Setup</Text>
-      <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Username" value={username} onChangeText={setUsername} />
-      <TextInput style={styles.input} placeholder="Birthday (YYYY-MM-DD)" value={birthday} onChangeText={setBirthday} />
-      <TextInput style={styles.input} placeholder="Mobile Number" value={mobile} onChangeText={setMobile} keyboardType="phone-pad" />
-      <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
-      <TextInput style={styles.input} placeholder="Student ID" value={studentId} onChangeText={setStudentId} />
-      <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setProfilePic)}>
-        <Text style={styles.nextButtonText}>{profilePic ? 'Change Profile Picture' : 'Select Profile Picture'}</Text>
-      </TouchableOpacity>
-      {profilePic && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Profile picture selected</Text>}
-      <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setCoverPhoto)}>
-        <Text style={styles.nextButtonText}>{coverPhoto ? 'Change Cover Photo' : 'Select Cover Photo'}</Text>
-      </TouchableOpacity>
-      {coverPhoto && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Cover photo selected</Text>}
-      <TouchableOpacity style={styles.nextButton} onPress={handleSubmit} disabled={loading}>
-        <Text style={styles.nextButtonText}>{loading ? 'Saving...' : 'Finish Setup'}</Text>
-      </TouchableOpacity>
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Complete Your Profile</Text>
+        <Text style={[styles.infoText, { textAlign: 'center', marginBottom: 10, paddingHorizontal: 30 }]}>
+          Your email is verified. Add more details to complete your profile.
+        </Text>
+        
+        {/* Email (Read-only) */}
+        <TextInput 
+          style={[styles.input, { backgroundColor: '#f0f0f0', color: '#666' }]} 
+          placeholder="Email" 
+          value={email} 
+          editable={false} 
+        />
+        
+        {/* Name (Auto-populated from email, editable) */}
+        <TextInput 
+          style={styles.input} 
+          placeholder="Full Name" 
+          value={name} 
+          onChangeText={setName} 
+        />
+        
+        <TextInput style={styles.input} placeholder="Student ID" value={studentId} onChangeText={setStudentId} />
+        <TextInput style={styles.input} placeholder="Birthday (YYYY-MM-DD)" value={birthday} onChangeText={setBirthday} />
+        <TextInput style={styles.input} placeholder="Mobile Number" value={mobile} onChangeText={setMobile} keyboardType="phone-pad" />
+        <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
+        <TextInput 
+          style={[styles.input, { height: 80 }]} 
+          placeholder="About (Tell us about yourself)" 
+          value={about} 
+          onChangeText={setAbout}
+          multiline
+          numberOfLines={3}
+        />
+        
+        <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setProfilePic)}>
+          <Text style={styles.nextButtonText}>{profilePic ? 'Change Profile Picture' : 'Select Profile Picture'}</Text>
+        </TouchableOpacity>
+        {profilePic && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Profile picture selected</Text>}
+        <TouchableOpacity style={styles.nextButton} onPress={() => pickImage(setCoverPhoto)}>
+          <Text style={styles.nextButtonText}>{coverPhoto ? 'Change Cover Photo' : 'Select Cover Photo'}</Text>
+        </TouchableOpacity>
+        {coverPhoto && <Text style={{ textAlign: 'center', marginBottom: 8 }}>Cover photo selected</Text>}
+        <TouchableOpacity style={styles.nextButton} onPress={handleSubmit} disabled={loading}>
+          <Text style={styles.nextButtonText}>{loading ? 'Saving...' : 'Finish Setup'}</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -266,15 +334,17 @@ function AccountSetupScreen({ navigation, route }) {
 function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [usePasswordMode, setUsePasswordMode] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [verificationUrl, setVerificationUrl] = useState('');
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  // Remove Google Auth - causing crashes
-  // const [authError, setAuthError] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [showOk, setShowOk] = useState(false);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const SCHOOL_EMAIL_DOMAIN = '@g.cjc.edu.ph'; // Cor Jesu College email domain
 
   useEffect(() => {
     const loadFonts = async () => {
@@ -317,48 +387,244 @@ function LoginScreen({ navigation }) {
     }, 2000);
   };
 
-  const handleLogin = async () => {
+  const validateSchoolEmail = (emailAddress) => {
+    return emailAddress.toLowerCase().endsWith(SCHOOL_EMAIL_DOMAIN);
+  };
+
+  const handleVerifyLink = async () => {
+    if (!verificationUrl || !verificationUrl.trim()) {
+      alert('Please paste the verification link from your email');
+      return;
+    }
+
     setLoading(true);
-    setLoadingMessage('Please wait');
-    setShowOk(false);
+    setLoadingMessage('Verifying your account...');
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Check if user has completed profile setup
-      const userDocRef = doc(db, 'users', userCredential.user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (!userDocSnap.exists() || !userDocSnap.data().name) {
-        // User hasn't completed profile setup
-        setLoading(false);
-        navigation.replace('AccountSetup', { email: userCredential.user.email });
+      if (isSignInWithEmailLink(auth, verificationUrl)) {
+        const result = await signInWithEmailLink(auth, email, verificationUrl);
+        await AsyncStorage.removeItem('emailForSignIn');
+        
+        const isNewUser = await AsyncStorage.getItem('isNewUser') === 'true';
+        await AsyncStorage.removeItem('isNewUser');
+
+        // Check if user profile exists
+        const userDocRef = doc(db, 'users', result.user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (!userDocSnap.exists() || !userDocSnap.data().name) {
+          // New user - create profile automatically
+          await setDoc(userDocRef, {
+            email: result.user.email,
+            createdAt: new Date(),
+            accountStatus: 'active',
+            school: 'Cor Jesu College',
+            verifiedStudent: true
+          });
+
+          setLoadingMessage('Creating your profile...');
+          setTimeout(() => {
+            setLoading(false);
+            navigation.replace('AccountSetup', { email: result.user.email });
+          }, 1000);
+        } else {
+          // Existing user - check if suspended
+          const userData = userDocSnap.data();
+          if (userData.accountStatus === 'suspended' || userData.status === 'suspended') {
+            await signOut(auth);
+            alert(`Account suspended: ${userData.suspensionReason || 'Your account has been suspended. Please contact support.'}`);
+            setLoading(false);
+            return;
+          }
+
+          setLoadingMessage('Welcome back! Logging you in...');
+          setTimeout(() => {
+            setLoading(false);
+            navigation.replace('Home');
+          }, 1200);
+        }
       } else {
-        setLoadingMessage('Login successful!');
+        setLoading(false);
+        alert('Invalid verification link. Please copy the complete link from your email.');
+      }
+    } catch (error) {
+      console.error('Error verifying email link:', error);
+      setLoading(false);
+      
+      if (error.code === 'auth/invalid-action-code') {
+        alert('This verification link has expired or already been used. Please request a new one.');
+      } else {
+        alert(`Verification failed: ${error.message}`);
+      }
+    }
+  };
+
+  const handlePasswordAuth = async () => {
+    if (!email || !email.trim()) {
+      alert('Please enter your Cor Jesu College email address');
+      return;
+    }
+
+    if (!validateSchoolEmail(email)) {
+      alert(`Please use your Cor Jesu College email address (${SCHOOL_EMAIL_DOMAIN})`);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      alert('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    setLoadingMessage('Authenticating...');
+
+    try {
+      // Try to sign in first
+      setLoadingMessage('Signing you in...');
+      let userCredential;
+      
+      try {
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Check if suspended
+        const userDocRef = doc(db, 'users', userCredential.user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        const userData = userDocSnap.data();
+        
+        if (userData?.accountStatus === 'suspended' || userData?.status === 'suspended') {
+          await signOut(auth);
+          alert(`Account suspended: ${userData.suspensionReason || 'Your account has been suspended.'}`);
+          setLoading(false);
+          return;
+        }
+
+        setLoadingMessage('Welcome back! 🎉');
         setTimeout(() => {
           setLoading(false);
           navigation.replace('Home');
-        }, 1200);
+        }, 1000);
+        
+      } catch (signInError) {
+        // If user doesn't exist, create new account
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          setLoadingMessage('Creating your account...');
+          userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          
+          // Create user profile
+          await setDoc(doc(db, 'users', userCredential.user.uid), {
+            email: userCredential.user.email,
+            createdAt: new Date(),
+            accountStatus: 'active',
+            school: 'Cor Jesu College',
+            verifiedStudent: true
+          });
+
+          setLoadingMessage('Account created! 🎓');
+          setTimeout(() => {
+            setLoading(false);
+            navigation.replace('AccountSetup', { email: userCredential.user.email });
+          }, 1000);
+        } else {
+          throw signInError;
+        }
       }
     } catch (error) {
       setLoading(false);
-      alert(error.message);
+      console.error('Password auth error:', error);
+      
+      if (error.code === 'auth/wrong-password') {
+        alert('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        alert('This email is already registered. Please sign in instead.');
+      } else if (error.code === 'auth/invalid-email') {
+        alert('Invalid email address.');
+      } else {
+        alert(`Authentication failed: ${error.message}`);
+      }
     }
   };
-  const handleSignUp = async () => {
+
+  const handleSendVerificationLink = async () => {
+    if (!email || !email.trim()) {
+      alert('Please enter your Cor Jesu College email address');
+      return;
+    }
+
+    if (!validateSchoolEmail(email)) {
+      alert(`Please use your Cor Jesu College email address (${SCHOOL_EMAIL_DOMAIN})`);
+      return;
+    }
+
     setLoading(true);
-    setLoadingMessage('Creating your account...');
+    setLoadingMessage('Checking account...');
     setShowOk(false);
+
     try {
-      // Create user with email and password
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Check if email is already registered in Firebase Auth (no Firestore query needed)
+      const signInMethods = await fetchSignInMethodsForEmail(auth, email);
       
-      // Redirect to account setup
+      if (signInMethods.length > 0) {
+        // User already registered - prompt to use password instead
+        setLoading(false);
+        Alert.alert(
+          'Welcome back! 👋',
+          'This email is already registered.\n\nPlease use password sign-in instead of email verification.',
+          [
+            {
+              text: 'Use Password',
+              onPress: () => setUsePasswordMode(true)
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            }
+          ]
+        );
+        return;
+      }
+      
+      // New user - send verification link
+      setLoadingMessage('Sending verification link...');
+      
+      const actionCodeSettings = {
+        // URL you want to redirect back to after email link is clicked
+        url: 'https://campulse-8c50e.firebaseapp.com/__/auth/action',
+        handleCodeInApp: true,
+        iOS: {
+          bundleId: 'com.invictus28.safire'
+        },
+        android: {
+          packageName: 'com.invictus28',
+          installApp: true,
+          minimumVersion: '12'
+        }
+      };
+
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+      
+      // Save email locally for verification
+      await AsyncStorage.setItem('emailForSignIn', email);
+      
+      // Reset quota exceeded flag on success
+      setQuotaExceeded(false);
+      
+      setEmailSent(true);
       setLoading(false);
-      navigation.replace('AccountSetup', { email: userCredential.user.email });
       
+      setModalMessage(`✅ Verification link sent to ${email}!\n\nCheck your inbox and click the link to create your account.`);
+      setModalVisible(true);
     } catch (error) {
       setLoading(false);
-      alert(error.message);
+      console.error('Error sending email link:', error);
+      
+      // Check if quota exceeded
+      if (error.code === 'auth/quota-exceeded' || error.message.includes('quota') || error.message.includes('QUOTA_EXCEEDED')) {
+        setQuotaExceeded(true);
+        setUsePasswordMode(true);
+        alert('📧 Email limit reached!\n\nWe\'ve switched to password mode. You can still sign in or create an account using a password (min 6 characters).\n\nEmail verification will work again tomorrow! 🔄');
+      } else {
+        alert(`Failed to send verification link: ${error.message}`);
+      }
     }
   };
   const handleOk = () => {
@@ -385,46 +651,116 @@ function LoginScreen({ navigation }) {
       {/* Brand */}
       <Text style={styles.brandGreen}>Safire</Text>
       {/* Title */}
-      <Text style={styles.title}>{isSignUp ? 'Sign up to Safire' : 'Sign in to Safire'}</Text>
+      <Text style={styles.title}>Sign in to Safire</Text>
       
-      {/* Email/Password Form - No Google Auth */}
-      {/* Input Fields */}
+      {/* Instructions */}
+      <Text style={styles.infoText}>
+        Enter your Cor Jesu College email address{'\n'}
+        {emailSent ? '' : 'We\'ll check if you have an account'}
+      </Text>
+      
+      {/* Email Input */}
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder="yourlastname@g.cjc.edu.ph"
         placeholderTextColor="#999"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
+        editable={!emailSent}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#999"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+      
+      {/* Password Input (only in password mode) */}
+      {usePasswordMode && !emailSent && (
+        <TextInput
+          style={styles.input}
+          placeholder="Password (min 6 characters)"
+          placeholderTextColor="#999"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+        />
+      )}
+      
       {/* Main Action Button */}
-      <TouchableOpacity
-        style={styles.nextButton}
-        onPress={isSignUp ? handleSignUp : handleLogin}
-      >
-        <Text style={styles.nextButtonText}>{isSignUp ? 'Sign Up' : 'Next'}</Text>
-      </TouchableOpacity>
-      {/* Forgot Password Button */}
-      <TouchableOpacity style={styles.forgotButton} onPress={() => { }}>
-        <Text style={styles.forgotBoldText}>Forgot Password?</Text>
-      </TouchableOpacity>
-      {/* Switch between Log In and Sign Up */}
-      <View style={styles.switchRow}>
-        <Text style={styles.infoText}>
-          {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+      {!emailSent ? (
+        <>
+          <TouchableOpacity
+            style={styles.nextButton}
+            onPress={usePasswordMode ? handlePasswordAuth : handleSendVerificationLink}
+          >
+            <Text style={styles.nextButtonText}>
+              {usePasswordMode ? 'Sign In / Sign Up' : 'Continue'}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Toggle between email link and password */}
+          <TouchableOpacity 
+            style={{ marginTop: 15 }}
+            onPress={() => {
+              if (!quotaExceeded) {
+                setUsePasswordMode(!usePasswordMode);
+              } else {
+                // Try email link again to check if quota reset
+                setQuotaExceeded(false);
+                setUsePasswordMode(false);
+              }
+            }}
+          >
+            <Text style={styles.switchText}>
+              {quotaExceeded 
+                ? '🔄 Try Email Link Again (Quota may have reset)' 
+                : (usePasswordMode 
+                  ? '📧 Use Email Link Instead' 
+                  : '🔑 Use Password Instead')}
+            </Text>
+          </TouchableOpacity>
+          
+          {quotaExceeded && (
+            <Text style={[styles.infoText, { color: '#ff6b6b', marginTop: 10 }]}>
+              Email quota exceeded. Using password mode temporarily.
+            </Text>
+          )}
+        </>
+      ) : (
+        <View style={{ alignItems: 'center', marginTop: 10, width: '80%', alignSelf: 'center' }}>
+          <Text style={[styles.infoText, { color: '#2667ff', fontFamily: 'Outfit-Bold', marginBottom: 10 }]}>
+            ✓ Email sent to {email}!
+          </Text>
+          <Text style={[styles.infoText, { textAlign: 'center', marginBottom: 15 }]}>
+            Check your inbox and copy the verification link below:
+          </Text>
+          
+          <TextInput
+            style={[styles.input, { width: '100%' }]}
+            placeholder="Paste verification link here"
+            placeholderTextColor="#999"
+            value={verificationUrl}
+            onChangeText={setVerificationUrl}
+            autoCapitalize="none"
+            multiline
+          />
+          
+          <TouchableOpacity
+            style={styles.nextButton}
+            onPress={handleVerifyLink}
+          >
+            <Text style={styles.nextButtonText}>Verify & Sign In</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={() => { setEmailSent(false); setEmail(''); setVerificationUrl(''); }} style={{ marginTop: 10 }}>
+            <Text style={styles.switchText}>Use different email</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      {/* Info Text */}
+      <View style={[styles.switchRow, { marginTop: 20 }]}>
+        <Text style={[styles.infoText, { textAlign: 'center', paddingHorizontal: 30, fontSize: 12 }]}>
+          Only Cor Jesu College students with valid school email addresses can access this app.
         </Text>
-        <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)}>
-          <Text style={styles.switchText}>{isSignUp ? 'Log In' : 'Sign Up'}</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -495,7 +831,18 @@ const AuthUserProvider = ({ children }) => {
 
           if (userDocSnap.exists()) {
             // Merge Firestore data with Auth data
-            userData = { ...userData, ...userDocSnap.data() };
+            const firestoreData = userDocSnap.data();
+            userData = { ...userData, ...firestoreData };
+            
+            // Check if user is suspended
+            if (firestoreData.accountStatus === 'suspended' || firestoreData.status === 'suspended') {
+              console.log('User account is suspended, signing out...');
+              await signOut(auth);
+              alert(`Account suspended: ${firestoreData.suspensionReason || 'Your account has been suspended. Please contact support.'}`);
+              setUser(null);
+              setLoading(false);
+              return;
+            }
           }
 
           setUser(userData);
@@ -524,6 +871,30 @@ const AuthUserProvider = ({ children }) => {
     loading,
     clearUserData: () => {
       setUser(null);
+    },
+    updateUser: async (updatedData) => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return false;
+        
+        // Update Firestore
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          ...updatedData,
+          updatedAt: new Date()
+        });
+        
+        // Update local state
+        setUser(prevUser => ({
+          ...prevUser,
+          ...updatedData
+        }));
+        
+        return true;
+      } catch (error) {
+        console.error('Error updating user:', error);
+        return false;
+      }
     },
     signOut: async () => {
       try {

@@ -53,7 +53,11 @@ export default function Dashboard({ userRole }) {
           todayReports: reports.filter(r => {
             const reportDate = r.createdAt?.toDate();
             return reportDate && reportDate >= today;
-          }).length
+          }).length,
+          falseReports: reports.filter(r => r.isFalsePositive).length,
+          aiAnalyzedReports: reports.filter(r => r.aiAnalyzed).length,
+          highRiskReports: reports.filter(r => r.aiAnalysis?.riskLevel === 'HIGH').length,
+          autoFlaggedReports: reports.filter(r => r.aiAutoFlagged).length
         });
 
         // Get recent reports (last 5)
@@ -67,9 +71,16 @@ export default function Dashboard({ userRole }) {
     const unsubscribeUsers = onSnapshot(
       collection(db, 'users'),
       (snapshot) => {
+        const users = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
         setStats(prev => ({
           ...prev,
-          totalUsers: snapshot.docs.length
+          totalUsers: users.length,
+          suspendedUsers: users.filter(u => u.accountStatus === 'suspended' || u.status === 'suspended').length,
+          usersWithFalseReports: users.filter(u => (u.falseReportsCount || 0) > 0).length
         }));
         setLoading(false);
       }
@@ -187,6 +198,67 @@ export default function Dashboard({ userRole }) {
             icon={<TrendingIcon />}
             color="secondary"
             subtitle="Reports submitted today"
+          />
+        </Grid>
+      </Grid>
+
+      {/* Anti-False Reporting Statistics */}
+      <Typography variant="h5" gutterBottom sx={{ mt: 2, mb: 2 }}>
+        Anti-False Reporting Statistics
+      </Typography>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="False Reports"
+            value={stats.falseReports || 0}
+            icon={<WarningIcon />}
+            color="error"
+            subtitle="Flagged as false"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="AI Analyzed"
+            value={stats.aiAnalyzedReports || 0}
+            icon={<CheckIcon />}
+            color="info"
+            subtitle="Reports processed by AI"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="High Risk"
+            value={stats.highRiskReports || 0}
+            icon={<WarningIcon />}
+            color="warning"
+            subtitle="AI flagged high risk"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Auto-Flagged"
+            value={stats.autoFlaggedReports || 0}
+            icon={<ReportIcon />}
+            color="error"
+            subtitle="Automatically flagged"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Suspended Users"
+            value={stats.suspendedUsers || 0}
+            icon={<PeopleIcon />}
+            color="error"
+            subtitle="Currently suspended"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Users w/ False Reports"
+            value={stats.usersWithFalseReports || 0}
+            icon={<PeopleIcon />}
+            color="warning"
+            subtitle="Have submitted false reports"
           />
         </Grid>
       </Grid>

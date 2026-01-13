@@ -16,6 +16,7 @@ import UsersManagement from './components/UsersManagement';
 import Analytics from './components/Analytics';
 import Settings from './components/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
+import CreateAdminUser from './components/CreateAdminUser';
 
 // Theme configuration
 const theme = createTheme({
@@ -57,14 +58,16 @@ function App() {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           const userData = userDoc.data();
           
-          if (userData && (userData.role === 'admin' || userData.role === 'super_admin')) {
+          if (userData && (userData.role === 'admin' || userData.role === 'super_admin' || userData.role === 'superadmin')) {
             setUser(user);
             setUserRole(userData.role);
           } else {
             // User is not authorized
+            console.log('User role not authorized:', userData?.role);
             setUser(null);
             setUserRole(null);
             await auth.signOut();
+            alert('Access denied. Admin privileges required.');
           }
         } catch (error) {
           console.error('Error checking user role:', error);
@@ -98,7 +101,12 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <LoginPage />
+        <Router>
+          <Routes>
+            <Route path="/create-admin" element={<CreateAdminUser />} />
+            <Route path="*" element={<LoginPage />} />
+          </Routes>
+        </Router>
       </ThemeProvider>
     );
   }
@@ -132,6 +140,7 @@ function App() {
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
               <Route path="/settings" element={<Settings userRole={userRole} />} />
+              <Route path="/create-admin" element={<CreateAdminUser />} />
             </Routes>
           </Box>
         </Box>

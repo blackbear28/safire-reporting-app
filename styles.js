@@ -293,6 +293,13 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  editWarning: {
+    fontFamily: 'Outfit-Medium',
+    fontSize: 13,
+    color: '#ff9500',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   reportForm: {
     padding: 20,
   },

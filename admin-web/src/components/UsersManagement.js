@@ -25,7 +25,9 @@ import {
   Tooltip,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   Person,
@@ -36,7 +38,10 @@ import {
   Email,
   Phone,
   CalendarToday,
-  AdminPanelSettings
+  AdminPanelSettings,
+  Warning,
+  PlayArrow,
+  Visibility
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -55,6 +60,10 @@ export default function UsersManagement({ userRole }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [suspensionReason, setSuspensionReason] = useState('');
+  const [userToSuspend, setUserToSuspend] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -109,6 +118,68 @@ export default function UsersManagement({ userRole }) {
       });
     } catch (error) {
       console.error('Error updating user status:', error);
+    }
+  };
+
+  const handleSuspendUser = (user) => {
+    setUserToSuspend(user);
+    setSuspensionReason('');
+    setSuspendDialogOpen(true);
+  };
+
+  const submitSuspension = async () => {
+    if (!userToSuspend || !suspensionReason.trim()) {
+      showSnackbar('Please provide a reason for suspension', 'error');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', userToSuspend.id), {
+        accountStatus: 'suspended',
+        suspendedAt: new Date(),
+        suspensionReason: suspensionReason,
+        suspendedBy: 'admin', // You can get actual admin ID from auth
+        status: 'suspended'
+      });
+
+      showSnackbar(`User ${userToSuspend.name || userToSuspend.email} has been suspended`, 'success');
+      setSuspendDialogOpen(false);
+      setUserToSuspend(null);
+      setSuspensionReason('');
+    } catch (error) {
+      console.error('Error suspending user:', error);
+      showSnackbar('Failed to suspend user', 'error');
+    }
+  };
+
+  const handleReactivateUser = async (user) => {
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        accountStatus: 'active',
+        reactivatedAt: new Date(),
+        reactivatedBy: 'admin',
+        status: 'active',
+        suspensionReason: null,
+        suspendedAt: null
+      });
+
+      showSnackbar(`User ${user.name || user.email} has been reactivated`, 'success');
+    } catch (error) {
+      console.error('Error reactivating user:', error);
+      showSnackbar('Failed to reactivate user', 'error');
+    }
+  };
+
+  const showSnackbar = (message, severity) => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const getUserStatusColor = (status) => {
+    switch (status) {
+      case 'active': return 'success';
+      case 'suspended': return 'error';
+      case 'pending': return 'warning';
+      default: return 'default';
     }
   };
 
@@ -295,15 +366,27 @@ export default function UsersManagement({ userRole }) {
                           </IconButton>
                         </Tooltip>
                         
-                        <Tooltip title={user.status === 'active' ? 'Suspend User' : 'Activate User'}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleToggleUserStatus(user.id, user.status)}
-                            color={user.status === 'active' ? 'error' : 'success'}
-                          >
-                            {user.status === 'active' ? <Block /> : <CheckCircle />}
-                          </IconButton>
-                        </Tooltip>
+                        {user.status === 'active' || user.accountStatus === 'active' ? (
+                          <Tooltip title="Suspend User">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleSuspendUser(user)}
+                              color="error"
+                            >
+                              <Block />
+                            </IconButton>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Reactivate User">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleReactivateUser(user)}
+                              color="success"
+                            >
+                              <PlayArrow />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         
                         {userRole === 'super_admin' && (
                           <Tooltip title="Delete User">
@@ -437,6 +520,40 @@ export default function UsersManagement({ userRole }) {
                         label={selectedUser.status || 'active'} 
                         color={getStatusColor(selectedUser.status)}
                       />
+                      {selectedUser.accountStatus === 'suspended' && (
+                        <Box sx={{ mt: 1, p: 1, bgcolor: 'error.light', borderRadius: 1 }}>
+                          <Typography variant="body2" color="error.dark">
+                            <strong>Suspended:</strong> {selectedUser.suspensionReason}
+                          </Typography>
+                          <Typography variant="caption" color="error.dark">
+                            Suspended at: {selectedUser.suspendedAt?.toDate()?.toLocaleString()}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" gutterBottom>Report History</Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip 
+                          label={`False Reports: ${selectedUser.falseReportsCount || 0}`}
+                          color={selectedUser.falseReportsCount > 2 ? 'error' : selectedUser.falseReportsCount > 0 ? 'warning' : 'success'}
+                          size="small"
+                          icon={selectedUser.falseReportsCount > 0 ? <Warning /> : <CheckCircle />}
+                        />
+                        {selectedUser.autoSuspended && (
+                          <Chip 
+                            label="Auto-Suspended" 
+                            color="error" 
+                            size="small"
+                            icon={<Block />}
+                          />
+                        )}
+                      </Box>
+                      {selectedUser.falseReportsCount > 0 && (
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                          Last false report: {selectedUser.lastFalseReport?.toDate()?.toLocaleDateString() || 'Unknown'}
+                        </Typography>
+                      )}
                     </Grid>
                   </Grid>
                 )}
@@ -461,6 +578,77 @@ export default function UsersManagement({ userRole }) {
           </>
         )}
       </Dialog>
+
+      {/* Suspension Dialog */}
+      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Block sx={{ mr: 1, color: 'error.main' }} />
+            Suspend User Account
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {userToSuspend && (
+            <>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                You are about to suspend this user account. This will:
+                <ul>
+                  <li>Prevent the user from logging into the app</li>
+                  <li>Block all user activity and report submissions</li>
+                  <li>Require manual reactivation by an administrator</li>
+                </ul>
+              </Alert>
+              
+              <Typography variant="subtitle2" gutterBottom>
+                User: {userToSuspend.name || userToSuspend.email}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Current false reports: {userToSuspend.falseReportsCount || 0}
+              </Typography>
+              
+              <TextField
+                fullWidth
+                label="Reason for suspension"
+                placeholder="Please explain why this user is being suspended..."
+                value={suspensionReason}
+                onChange={(e) => setSuspensionReason(e.target.value)}
+                multiline
+                rows={4}
+                required
+                error={!suspensionReason.trim()}
+                helperText={!suspensionReason.trim() ? "A reason is required" : ""}
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSuspendDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={submitSuspension}
+            variant="contained" 
+            color="error"
+            disabled={!suspensionReason.trim()}
+            startIcon={<Block />}
+          >
+            Suspend User
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

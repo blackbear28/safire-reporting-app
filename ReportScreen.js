@@ -35,17 +35,21 @@ const PRIORITY_KEYWORDS = {
   low: ['minor', 'eventually', 'when possible', 'feedback']
 };
 
-export default function ReportScreen({ navigation }) {
+export default function ReportScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [priority, setPriority] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [media, setMedia] = useState([]);
-  const [location, setLocation] = useState(null);
-  const [building, setBuilding] = useState('');
-  const [room, setRoom] = useState('');
+  const editMode = route?.params?.editMode || false;
+  const reportId = route?.params?.reportId || null;
+  const reportData = route?.params?.reportData || null;
+  
+  const [title, setTitle] = useState(editMode && reportData ? reportData.title || '' : '');
+  const [description, setDescription] = useState(editMode && reportData ? reportData.description || '' : '');
+  const [category, setCategory] = useState(editMode && reportData ? reportData.category || '' : '');
+  const [priority, setPriority] = useState(editMode && reportData ? reportData.priority || '' : '');
+  const [isAnonymous, setIsAnonymous] = useState(editMode && reportData ? reportData.anonymous || false : false);
+  const [media, setMedia] = useState(editMode && reportData && reportData.media ? reportData.media : []);
+  const [location, setLocation] = useState(editMode && reportData && reportData.location ? reportData.location : null);
+  const [building, setBuilding] = useState(editMode && reportData?.location?.building ? reportData.location.building : '');
+  const [room, setRoom] = useState(editMode && reportData?.location?.room ? reportData.location.room : '');
   const [loading, setLoading] = useState(false);
 
   // Smart categorization based on description
@@ -160,14 +164,31 @@ export default function ReportScreen({ navigation }) {
       return;
     }
 
+    // Check if editing is still allowed (within 15 minutes)
+    if (editMode && reportData) {
+      const now = new Date();
+      const createdAt = reportData.createdAt instanceof Date 
+        ? reportData.createdAt 
+        : (reportData.createdAt?.toDate ? reportData.createdAt.toDate() : new Date());
+      const diffInMinutes = (now - createdAt) / (1000 * 60);
+      
+      if (diffInMinutes > 15) {
+        Alert.alert('Error', 'Edit time has expired. You can only edit reports within 15 minutes of posting.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const sentiment = analyzeSentiment(description);
       const user = auth.currentUser;
       
-      const reportData = {
+      const reportPayload = {
         userId: isAnonymous ? null : user?.uid,
-        authorName: isAnonymous ? 'Anonymous' : user?.displayName || user?.email,
+        authorId: isAnonymous ? null : user?.uid,
+        authorName: isAnonymous ? 'Anonymous' : user?.displayName || user?.email?.split('@')[0] || 'User',
+        authorUsername: isAnonymous ? 'anonymous' : user?.email || 'user',
+        authorEmail: isAnonymous ? null : user?.email,
         title: title.trim(),
         description: description.trim(),
         category: category || 'other',
@@ -186,10 +207,17 @@ export default function ReportScreen({ navigation }) {
         slaDeadline: calculateSLADeadline(priority)
       };
 
-      const result = await ReportService.submitReport(reportData);
+      let result;
+      if (editMode && reportId) {
+        // Update existing report
+        result = await ReportService.updateReport(reportId, reportPayload);
+      } else {
+        // Create new report
+        result = await ReportService.submitReport(reportPayload);
+      }
       
       if (result.success) {
-        Alert.alert('Success', 'Your report has been submitted successfully!', [
+        Alert.alert('Success', editMode ? 'Your report has been updated successfully!' : 'Your report has been submitted successfully!', [
           { 
             text: 'OK', 
             onPress: () => {
@@ -208,7 +236,7 @@ export default function ReportScreen({ navigation }) {
           }
         ]);
       } else {
-        Alert.alert('Error', result.error || 'Failed to submit report. Please try again.');
+        Alert.alert('Error', result.error || `Failed to ${editMode ? 'update' : 'submit'} report. Please try again.`);
       }
       
     } catch (error) {
@@ -267,8 +295,15 @@ export default function ReportScreen({ navigation }) {
       </View>
 
       <View style={styles.reportHeader}>
-        <Text style={styles.reportTitle}>Submit Report</Text>
-        <Text style={styles.reportSubtitle}>Help us improve your campus experience</Text>
+        <Text style={styles.reportTitle}>{editMode ? 'Edit Report' : 'Submit Report'}</Text>
+        <Text style={styles.reportSubtitle}>
+          {editMode ? 'Update your report details' : 'Help us improve your campus experience'}
+        </Text>
+        {editMode && (
+          <Text style={styles.editWarning}>
+            ⏱️ You can edit your report within 15 minutes of posting
+          </Text>
+        )}
       </View>
 
       <View style={styles.reportForm}>
@@ -405,7 +440,7 @@ export default function ReportScreen({ navigation }) {
           disabled={loading}
         >
           <Text style={styles.submitButtonText}>
-            {loading ? 'Submitting...' : 'Submit Report'}
+            {loading ? (editMode ? 'Updating...' : 'Submitting...') : (editMode ? 'Update Report' : 'Submit Report')}
           </Text>
         </TouchableOpacity>
       </View>

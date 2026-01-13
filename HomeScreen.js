@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -16,7 +16,8 @@ import {
   FlatList,
   RefreshControl,
   Linking,
-  Vibration
+  Vibration,
+  TextInput
 } from 'react-native';
 import * as Font from 'expo-font';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -173,7 +174,14 @@ const HomeTab = ({
   userUpvotes, 
   handleUpvote, 
   userData, 
-  handleDeletePost 
+  handleDeletePost,
+  searchQuery,
+  setSearchQuery,
+  selectedBuilding,
+  setSelectedBuilding,
+  buildings,
+  filteredFeed,
+  navigation
 }) => (
   <View style={styles.homeTabContainer}>
     <ScrollView 
@@ -327,46 +335,94 @@ const HomeTab = ({
     {/* Recent Activity Section */}
     <View style={styles.feedSectionTransparent}>
       <Text style={styles.sectionTitle}>Recent Activity</Text>
+      
+      {/* Search and Filter Controls */}
+      <View style={styles.searchFilterContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search reports..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.buildingFilterScroll}
+          contentContainerStyle={styles.buildingFilterContainer}
+        >
+          {buildings.map((building) => (
+            <TouchableOpacity
+              key={building}
+              style={[
+                styles.buildingChip,
+                selectedBuilding === building && styles.buildingChipActive
+              ]}
+              onPress={() => setSelectedBuilding(building)}
+            >
+              <Ionicons 
+                name={building === 'all' ? 'grid-outline' : 'business-outline'} 
+                size={14} 
+                color={selectedBuilding === building ? '#fff' : '#2667ff'} 
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[
+                styles.buildingChipText,
+                selectedBuilding === building && styles.buildingChipTextActive
+              ]}>
+                {building === 'all' ? 'All Buildings' : building}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        {(searchQuery !== '' || selectedBuilding !== 'all') && (
+          <View style={styles.filterResultsInfo}>
+            <Text style={styles.filterResultsText}>
+              Showing {filteredFeed.length} of {feed.length} reports
+            </Text>
+            {(searchQuery !== '' || selectedBuilding !== 'all') && (
+              <TouchableOpacity 
+                onPress={() => {
+                  setSearchQuery('');
+                  setSelectedBuilding('all');
+                }}
+                style={styles.clearFiltersButton}
+              >
+                <Text style={styles.clearFiltersText}>Clear filters</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+      
       {feedLoading ? (
         <View style={styles.feedLoading}>
           <ActivityIndicator size="large" color="#2667ff" />
           <Text style={styles.loadingText}>Loading reports...</Text>
           <Text style={styles.loadingHint}>Getting latest reports from the community</Text>
         </View>
-      ) : feed.length === 0 ? (
+      ) : filteredFeed.length === 0 ? (
         <View style={styles.emptyFeed}>
           <Ionicons name="document-outline" size={40} color="#ccc" />
-          <Text style={styles.emptyFeedText}>No reports yet</Text>
-          <Text style={styles.emptyFeedSubtext}>Be the first to submit a report!</Text>
-          <TouchableOpacity 
-            style={styles.testButton}
-            onPress={async () => {
-              console.log('Testing manual fetch...');
-              try {
-                const { getDocs, collection, query, orderBy } = await import('firebase/firestore');
-                const { db } = await import('./firebase');
-                const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-                const snapshot = await getDocs(q);
-                console.log('Manual fetch - found', snapshot.size, 'reports');
-                snapshot.forEach(doc => {
-                  console.log('Report:', doc.id, doc.data());
-                });
-              } catch (error) {
-                console.error('Manual fetch error:', error);
-              }
-            }}
-          >
-            <Text style={styles.testButtonText}>Test Fetch</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.resetButton}
-            onPress={handleResetUpvotes}
-          >
-            <Text style={styles.testButtonText}>Reset Upvotes</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptyFeedText}>
+            {searchQuery !== '' || selectedBuilding !== 'all' ? 'No reports match your filters' : 'No reports yet'}
+          </Text>
+          <Text style={styles.emptyFeedSubtext}>
+            {searchQuery !== '' || selectedBuilding !== 'all' ? 'Try adjusting your search or filters' : 'Be the first to submit a report!'}
+          </Text>
         </View>
       ) : (
-        feed.map((item, idx) => {
+        filteredFeed.map((item, idx) => {
           const timeAgo = getTimeAgo(item.createdAt);
           return (
             <React.Fragment key={item.id}>
@@ -389,12 +445,12 @@ const HomeTab = ({
                           <Text style={styles.tweetUsername}>
                             @{(() => {
                               if (item.anonymous) return 'anonymous';
+                              // Use full email as username if available
                               if (item.authorUsername && typeof item.authorUsername === 'string') {
                                 return String(item.authorUsername);
                               }
                               if (item.authorEmail && typeof item.authorEmail === 'string') {
-                                const emailParts = item.authorEmail.split('@');
-                                return emailParts.length > 0 ? String(emailParts[0]) : 'user';
+                                return String(item.authorEmail);
                               }
                               return 'user';
                             })()}
@@ -416,6 +472,40 @@ const HomeTab = ({
                       <Text style={styles.tweetContent} numberOfLines={4}>
                         {String(item.description || 'No description available')}
                       </Text>
+                      
+                      {/* Display images if available */}
+                      {item.media && item.media.length > 0 && (
+                        <View style={styles.tweetImageContainer}>
+                          {item.media.length === 1 ? (
+                            <Image 
+                              source={{ uri: item.media[0] }} 
+                              style={styles.tweetImageSingle}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.tweetImageGrid}>
+                              {item.media.slice(0, 4).map((imageUrl, index) => (
+                                <Image 
+                                  key={index}
+                                  source={{ uri: imageUrl }} 
+                                  style={[
+                                    styles.tweetImageMultiple,
+                                    item.media.length === 2 && styles.tweetImageTwo,
+                                    item.media.length === 3 && index === 0 && styles.tweetImageThreeFirst,
+                                    item.media.length === 3 && index > 0 && styles.tweetImageThreeOther
+                                  ]}
+                                  resizeMode="cover"
+                                />
+                              ))}
+                              {item.media.length > 4 && (
+                                <View style={styles.tweetImageOverlay}>
+                                  <Text style={styles.tweetImageOverlayText}>+{item.media.length - 4}</Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      )}
                       
                       <View style={styles.tweetTags}>
                         <View style={[
@@ -493,6 +583,39 @@ const HomeTab = ({
                         <Ionicons name="eye-outline" size={18} color="#8E8E93" />
                         <Text style={styles.tweetActionText}>{String(item.viewCount || 0)}</Text>
                       </View>
+                      
+                      {userData?.uid === item.authorId && (() => {
+                        const now = new Date();
+                        const createdAt = item.createdAt instanceof Date 
+                          ? item.createdAt 
+                          : (item.createdAt?.toDate ? item.createdAt.toDate() : new Date());
+                        const diffInMinutes = (now - createdAt) / (1000 * 60);
+                        return diffInMinutes <= 15;
+                      })() && (
+                        <TouchableOpacity 
+                          style={styles.tweetActionBtn}
+                          onPress={() => {
+                            Alert.alert(
+                              'Edit Report',
+                              'You have 15 minutes to edit your report. Would you like to edit it now?',
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                  text: 'Edit', 
+                                  onPress: () => navigation.navigate('ReportScreen', { 
+                                    editMode: true,
+                                    reportId: item.id,
+                                    reportData: item
+                                  })
+                                }
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={18} color="#2667ff" />
+                          <Text style={[styles.tweetActionText, { color: '#2667ff' }]}>Edit</Text>
+                        </TouchableOpacity>
+                      )}
                       
                       {userData?.uid === item.authorId && (
                         <TouchableOpacity 
@@ -590,7 +713,7 @@ const ComplaintTab = ({ styles, navigation }) => (
   </View>
 );
 
-const AccountTab = ({ styles, userData, navigation, handleLogout, clearUserData }) => {
+const AccountTab = ({ styles, userData, navigation, handleLogout, clearUserData, feedReports, setIndex }) => {
   if (userData) {
     return (
       <ScrollView 
@@ -681,6 +804,63 @@ const AccountTab = ({ styles, userData, navigation, handleLogout, clearUserData 
                 {userData?.bio || 'No bio provided'}
               </Text>
             </View>
+          </View>
+
+          {/* Your Reports Section */}
+          <View style={{  marginTop: 20, paddingHorizontal: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Ionicons name="newspaper" size={20} color="#2667ff" />
+              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 18, marginLeft: 8, color: '#333' }}>
+                Your Reports
+              </Text>
+            </View>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-around',
+              backgroundColor: '#f8f9fa',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 12
+            }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#2667ff' }}>
+                  {feedReports.filter(r => r.authorId === userData?.uid).length}
+                </Text>
+                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#666', marginTop: 4 }}>
+                  Total
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#ffa500' }}>
+                  {feedReports.filter(r => r.authorId === userData?.uid && r.status === 'pending').length}
+                </Text>
+                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#666', marginTop: 4 }}>
+                  Pending
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#4caf50' }}>
+                  {feedReports.filter(r => r.authorId === userData?.uid && r.status === 'resolved').length}
+                </Text>
+                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#666', marginTop: 4 }}>
+                  Resolved
+                </Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.viewReportsButton}
+              onPress={() => {
+                // Filter to show only user's reports
+                setIndex(0); // Switch to Feed tab
+              }}
+            >
+              <Ionicons name="list" size={20} color="#2667ff" />
+              <Text style={styles.viewReportsButtonText}>
+                View All My Reports
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={{ marginTop: 16 }}>
@@ -836,6 +1016,29 @@ export default function HomeScreen({ navigation, route }) {
   const [newsLoading, setNewsLoading] = useState(true);
   const [trendingWords, setTrendingWords] = useState([]);
   const [wordCloudLoading, setWordCloudLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBuilding, setSelectedBuilding] = useState('all');
+
+  // Get unique buildings from feed (memoized)
+  const buildings = useMemo(() => 
+    ['all', ...new Set(feed.filter(item => item.location?.building).map(item => item.location.building))],
+    [feed]
+  );
+
+  // Filter feed based on search query and selected building (memoized)
+  const filteredFeed = useMemo(() => 
+    feed.filter(item => {
+      const matchesSearch = searchQuery === '' || 
+        item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.authorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.location?.building?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesBuilding = selectedBuilding === 'all' || item.location?.building === selectedBuilding;
+      
+      return matchesSearch && matchesBuilding;
+    }),
+    [feed, searchQuery, selectedBuilding]
+  );
 
   // Update local loading state when user data is loaded
   useEffect(() => {
@@ -1223,32 +1426,67 @@ export default function HomeScreen({ navigation, route }) {
       return;
     }
 
+    // Optimistic update - update UI immediately
+    const currentUpvoteState = userUpvotes[reportId];
+    const newUpvoteState = !currentUpvoteState;
+    
+    setUserUpvotes(prev => ({
+      ...prev,
+      [reportId]: newUpvoteState
+    }));
+    
+    setFeed(prevFeed => 
+      prevFeed.map(item => 
+        item.id === reportId 
+          ? { 
+              ...item, 
+              upvotes: newUpvoteState ? (item.upvotes || 0) + 1 : Math.max((item.upvotes || 0) - 1, 0)
+            }
+          : item
+      )
+    );
+
     try {
       const result = await ReportService.upvoteReport(reportId, currentUserId);
-      if (result.success) {
-        // Update local upvote state
-        const isUpvoted = result.action === 'added';
+      if (!result.success) {
+        // Revert optimistic update on error
         setUserUpvotes(prev => ({
           ...prev,
-          [reportId]: isUpvoted
+          [reportId]: currentUpvoteState
         }));
         
-        // Update feed to reflect new upvote count
         setFeed(prevFeed => 
           prevFeed.map(item => 
             item.id === reportId 
               ? { 
                   ...item, 
-                  upvotes: result.newCount || 0
+                  upvotes: currentUpvoteState ? (item.upvotes || 0) + 1 : Math.max((item.upvotes || 0) - 1, 0)
                 }
               : item
           )
         );
-      } else {
+        
         Alert.alert('Error', result.error || 'Failed to upvote report');
       }
     } catch (error) {
       console.error('Error upvoting report:', error);
+      // Revert optimistic update on error
+      setUserUpvotes(prev => ({
+        ...prev,
+        [reportId]: currentUpvoteState
+      }));
+      
+      setFeed(prevFeed => 
+        prevFeed.map(item => 
+          item.id === reportId 
+            ? { 
+                ...item, 
+                upvotes: currentUpvoteState ? (item.upvotes || 0) + 1 : Math.max((item.upvotes || 0) - 1, 0)
+              }
+            : item
+        )
+      );
+      
       Alert.alert('Error', 'Failed to upvote report');
     }
   };
@@ -1271,10 +1509,9 @@ export default function HomeScreen({ navigation, route }) {
       await handleViewReport(item.id, userData.uid);
     }
     
-    // Navigate to post detail screen (you'll need to create this screen)
+    // Navigate to post detail screen - only pass ID to avoid serialization warning
     navigation.navigate('PostDetail', { 
-      postId: item.id,
-      post: item 
+      postId: item.id
     });
   };
 
@@ -1464,6 +1701,13 @@ export default function HomeScreen({ navigation, route }) {
       handleDeletePost={handleDeletePost}
       userData={userData}
       userUpvotes={userUpvotes}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      selectedBuilding={selectedBuilding}
+      setSelectedBuilding={setSelectedBuilding}
+      buildings={buildings}
+      filteredFeed={filteredFeed}
+      navigation={navigation}
     />,
     dashboard: () => <DashboardTab navigation={navigation} styles={styles} />,
     plus: () => <SubmitTab navigation={navigation} styles={styles} />,
@@ -1474,6 +1718,8 @@ export default function HomeScreen({ navigation, route }) {
       handleLogout={handleLogout}
       clearUserData={clearUserData}
       styles={styles}
+      feedReports={feed}
+      setIndex={setIndex}
     />,
   });
 
@@ -2513,6 +2759,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    flexWrap: 'wrap',
   },
   tweetActionBtn: {
     flexDirection: 'row',
@@ -2534,6 +2781,57 @@ const styles = StyleSheet.create({
   },
   tweetActionTextActive: {
     color: '#2667ff',
+    fontFamily: 'Outfit-Bold',
+  },
+
+  // Tweet Image Styles
+  tweetImageContainer: {
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  tweetImageSingle: {
+    width: '100%',
+    height: 250,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+  },
+  tweetImageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 2,
+  },
+  tweetImageMultiple: {
+    width: '49.5%',
+    height: 150,
+    backgroundColor: '#f0f0f0',
+  },
+  tweetImageTwo: {
+    width: '49.5%',
+    height: 200,
+  },
+  tweetImageThreeFirst: {
+    width: '100%',
+    height: 200,
+  },
+  tweetImageThreeOther: {
+    width: '49.5%',
+    height: 150,
+  },
+  tweetImageOverlay: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: '49.5%',
+    height: 150,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tweetImageOverlayText: {
+    color: '#fff',
+    fontSize: 24,
     fontFamily: 'Outfit-Bold',
   },
 
@@ -2641,5 +2939,96 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.metaText,
     color: '#999',
     marginLeft: 4,
+  },
+
+  // Search and Filter Styles
+  searchFilterContainer: {
+    marginBottom: 16,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSizes.bodyText,
+    fontFamily: 'Outfit-Regular',
+    color: '#000',
+  },
+  buildingFilterScroll: {
+    marginBottom: 8,
+  },
+  buildingFilterContainer: {
+    flexDirection: 'row',
+    paddingRight: 16,
+  },
+  buildingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#2667ff',
+    marginRight: 8,
+  },
+  buildingChipActive: {
+    backgroundColor: '#2667ff',
+    borderColor: '#2667ff',
+  },
+  buildingChipText: {
+    fontSize: FontSizes.metaText,
+    fontFamily: 'Outfit-Medium',
+    color: '#2667ff',
+  },
+  buildingChipTextActive: {
+    color: '#fff',
+  },
+  filterResultsInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  filterResultsText: {
+    fontSize: FontSizes.metaText,
+    fontFamily: 'Outfit-Regular',
+    color: '#666',
+  },
+  clearFiltersButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  clearFiltersText: {
+    fontSize: FontSizes.metaText,
+    fontFamily: 'Outfit-Medium',
+    color: '#2667ff',
+  },
+  
+  // View Reports Button
+  viewReportsButton: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewReportsButtonText: {
+    fontFamily: 'Outfit-Medium',
+    fontSize: FontSizes.actionText,
+    color: '#2667ff',
+    marginLeft: 8,
   },
 });

@@ -12,6 +12,9 @@ import {
   Platform,
   StatusBar,
   FlatList,
+  Image,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Font from 'expo-font';
@@ -24,26 +27,12 @@ export default function PostDetailScreen({ navigation, route }) {
   const { user: userData } = useUser();
   const insets = useSafeAreaInsets();
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [postData, setPostData] = useState(post || {
-    id: postId,
-    title: '',
-    description: '',
-    category: 'other',
-    priority: 'medium',
-    status: 'pending',
-    anonymous: false,
-    authorName: 'User',
-    authorUsername: 'user',
-    authorEmail: '',
-    createdAt: new Date(),
-    upvotes: 0,
-    viewCount: 0,
-    location: null
-  });
+  const [postData, setPostData] = useState(post || null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(true);
+  const [postLoading, setPostLoading] = useState(!post);
 
   // Load fonts
   useEffect(() => {
@@ -63,6 +52,31 @@ export default function PostDetailScreen({ navigation, route }) {
     };
     loadFonts();
   }, []);
+
+  // Load post data if not provided
+  useEffect(() => {
+    const loadPost = async () => {
+      if (!post && postId) {
+        try {
+          setPostLoading(true);
+          const result = await ReportService.getReportById(postId);
+          if (result.success && result.report) {
+            setPostData(result.report);
+          } else {
+            console.error('Failed to load post:', result.error);
+            Alert.alert('Error', 'Failed to load post details');
+          }
+        } catch (error) {
+          console.error('Error loading post:', error);
+          Alert.alert('Error', 'Failed to load post details');
+        } finally {
+          setPostLoading(false);
+        }
+      }
+    };
+
+    loadPost();
+  }, [postId, post]);
 
   // Load comments
   useEffect(() => {
@@ -217,12 +231,13 @@ export default function PostDetailScreen({ navigation, route }) {
     </View>
   );
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || postLoading || !postData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.loading}>
-          <Text>Loading...</Text>
+          <ActivityIndicator size="large" color="#2667ff" />
+          <Text style={{ marginTop: 10, fontFamily: 'System', color: '#666' }}>Loading post...</Text>
         </View>
       </View>
     );
@@ -239,7 +254,40 @@ export default function PostDetailScreen({ navigation, route }) {
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post</Text>
-        <View style={styles.headerRight} />
+        <View style={styles.headerRight}>
+          {/* Show edit button if user is author and within 15 minutes */}
+          {userData?.uid === postData?.authorId && (() => {
+            const now = new Date();
+            const createdAt = postData?.createdAt instanceof Date 
+              ? postData.createdAt 
+              : (postData?.createdAt?.toDate ? postData.createdAt.toDate() : new Date());
+            const diffInMinutes = (now - createdAt) / (1000 * 60);
+            return diffInMinutes <= 15;
+          })() && (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => {
+                Alert.alert(
+                  'Edit Report',
+                  'You can edit your report within 15 minutes of posting. Would you like to edit it now?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Edit', 
+                      onPress: () => navigation.navigate('ReportScreen', { 
+                        editMode: true,
+                        reportId: postData.id,
+                        reportData: postData
+                      })
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="create-outline" size={24} color="#2667ff" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <KeyboardAvoidingView 
@@ -272,7 +320,7 @@ export default function PostDetailScreen({ navigation, route }) {
                       (postData?.authorUsername && typeof postData.authorUsername === 'string') 
                         ? postData.authorUsername 
                         : (postData?.authorEmail && typeof postData.authorEmail === 'string' 
-                          ? postData.authorEmail.split('@')[0] 
+                          ? postData.authorEmail 
                           : 'user')
                     ))}
                   </Text>
@@ -293,6 +341,33 @@ export default function PostDetailScreen({ navigation, route }) {
                 ? postData.description 
                 : 'No description available')}
             </Text>
+
+            {/* Display images if available */}
+            {postData?.media && Array.isArray(postData.media) && postData.media.length > 0 && (
+              <ScrollView 
+                horizontal 
+                pagingEnabled 
+                showsHorizontalScrollIndicator={true}
+                style={styles.postImagesContainer}
+              >
+                {postData.media.map((imageUrl, index) => (
+                  <View key={index} style={styles.postImageWrapper}>
+                    <Image 
+                      source={{ uri: imageUrl }} 
+                      style={styles.postImage}
+                      resizeMode="contain"
+                    />
+                    {postData.media.length > 1 && (
+                      <View style={styles.imageCounter}>
+                        <Text style={styles.imageCounterText}>
+                          {index + 1} / {postData.media.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
 
             <View style={styles.postTags}>
               <View style={[styles.categoryTag, { backgroundColor: getCategoryColor(postData?.category) }]}>
@@ -448,22 +523,26 @@ const styles = StyleSheet.create({
   },
   postUserInfo: {
     flex: 1,
+    marginRight: 8,
   },
   postUserMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   postUserName: {
     fontFamily: 'Outfit-Bold',
     fontSize: 16,
     color: '#000',
     marginRight: 8,
+    flexShrink: 1,
   },
   postUsername: {
     fontFamily: 'Outfit-Regular',
     fontSize: 14,
     color: '#8E8E93',
+    flexShrink: 1,
   },
   postTime: {
     fontFamily: 'Outfit-Regular',
@@ -475,6 +554,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     alignItems: 'center',
+    marginLeft: 8,
   },
   postStatusText: {
     fontSize: 10,
@@ -545,6 +625,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginRight: 16,
+  },
+  postImagesContainer: {
+    marginTop: 12,
+    marginBottom: 12,
+    maxHeight: 400,
+  },
+  postImageWrapper: {
+    width: Dimensions.get('window').width - 32,
+    height: 350,
+    marginRight: 0,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageCounter: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  imageCounterText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Outfit-Bold',
   },
   commentsSection: {
     flex: 1,
@@ -657,5 +769,8 @@ const styles = StyleSheet.create({
   sendButtonActive: {
     backgroundColor: '#f0f4ff',
     borderRadius: 16,
+  },
+  editButton: {
+    padding: 8,
   },
 });
