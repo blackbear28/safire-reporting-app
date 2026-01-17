@@ -16,32 +16,58 @@ import {
   increment,
   getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
+import { supabase, STORAGE_BUCKET } from '../supabase';
+import * as FileSystem from 'expo-file-system';
 
 export class ReportService {
   
-  // Upload images to Firebase Storage
+  // Upload images to Supabase Storage
   static async uploadImages(images) {
     try {
       const imageUrls = [];
       
       for (let i = 0; i < images.length; i++) {
         const imageUri = images[i];
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
+        
+        // Read file as base64 using expo-file-system
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: 'base64',
+        });
+        
+        // Convert base64 to blob
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let j = 0; j < byteCharacters.length; j++) {
+          byteNumbers[j] = byteCharacters.charCodeAt(j);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
         
         // Create a unique filename
         const timestamp = Date.now();
-        const filename = `reports/${timestamp}_${i}.jpg`;
-        const storageRef = ref(storage, filename);
+        const filename = `${timestamp}_${i}.jpg`;
+        const filePath = `reports/${filename}`;
         
-        // Upload the file
-        await uploadBytes(storageRef, blob);
+        // Upload to Supabase Storage
+        const { data, error } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(filePath, blob, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+          });
         
-        // Get the download URL
-        const downloadURL = await getDownloadURL(storageRef);
-        imageUrls.push(downloadURL);
+        if (error) {
+          console.error('Supabase upload error:', error);
+          throw error;
+        }
+        
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from(STORAGE_BUCKET)
+          .getPublicUrl(filePath);
+        
+        imageUrls.push(urlData.publicUrl);
       }
       
       return { success: true, urls: imageUrls };
@@ -54,23 +80,21 @@ export class ReportService {
   // Submit a new report
   static async submitReport(reportData) {
     try {
-      // TEMPORARILY DISABLED: Upload images if any
-      // TODO: Enable when Firebase Storage is set up with Blaze plan
+      // Upload images if any using Supabase Storage
       let imageUrls = [];
-      /*
       if (reportData.media && reportData.media.length > 0) {
         const uploadResult = await this.uploadImages(reportData.media);
         if (uploadResult.success) {
           imageUrls = uploadResult.urls;
         } else {
           console.warn('Failed to upload images:', uploadResult.error);
+          // Continue with report submission even if images fail
         }
       }
-      */
       
       const report = {
         ...reportData,
-        media: imageUrls, // Empty for now - will store URLs when Storage is enabled
+        media: imageUrls,
         authorUsername: reportData.authorUsername || reportData.authorEmail || 'user',
         authorEmail: reportData.authorEmail || null,
         createdAt: serverTimestamp(),

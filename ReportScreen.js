@@ -151,15 +151,6 @@ export default function ReportScreen({ navigation, route }) {
 
     if (!result.canceled) {
       setMedia([...media, result.assets[0].uri]);
-      
-      // Track media attempt - Firebase Storage not configured
-      await usageLogger.trackMediaAttempt(false, 1);
-      
-      Alert.alert(
-        'Media Selected',
-        'Note: Firebase Storage is not configured yet, so media cannot be uploaded. The report will be submitted without media.',
-        [{ text: 'OK' }]
-      );
     }
   };
 
@@ -178,15 +169,6 @@ export default function ReportScreen({ navigation, route }) {
 
     if (!result.canceled) {
       setMedia([...media, result.assets[0].uri]);
-      
-      // Track media attempt - Firebase Storage not configured
-      await usageLogger.trackMediaAttempt(false, 1);
-      
-      Alert.alert(
-        'Photo Taken',
-        'Note: Firebase Storage is not configured yet, so media cannot be uploaded. The report will be submitted without media.',
-        [{ text: 'OK' }]
-      );
     }
   };
 
