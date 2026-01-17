@@ -96,8 +96,10 @@ import HomeScreen from './HomeScreen';
 import ReportScreen from './ReportScreen';
 import DashboardScreen from './DashboardScreen';
 import ChatScreen from './ChatScreen';
+import AdminMessagingScreen from './AdminMessagingScreen';
 import PostDetailScreen from './PostDetailScreen';
 import EditProfile from './EditProfile';
+import { ReportService } from './services/reportService';
 import TestFeedbackScreen from './TestFeedbackScreen';
 import { FontAwesome } from '@expo/vector-icons';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -203,6 +205,7 @@ function SplashScreen() {
 
 function AccountSetupScreen({ navigation, route }) {
   const { email } = route.params || {};
+  const { refreshUser } = useUser();
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [address, setAddress] = useState('');
@@ -255,7 +258,36 @@ function AccountSetupScreen({ navigation, route }) {
         return;
       }
       
-      await setDoc(doc(db, 'users', user.uid), {
+      console.log('Account Setup - Before Upload:', {
+        name,
+        role,
+        profilePic: profilePic ? 'has image' : 'no image',
+        coverPhoto: coverPhoto ? 'has image' : 'no image'
+      });
+      
+      // Upload profile images to Supabase if provided
+      let uploadedProfilePic = profilePic;
+      let uploadedCoverPhoto = coverPhoto;
+      
+      if (profilePic && !profilePic.startsWith('http')) {
+        console.log('Uploading profile pic...');
+        const url = await ReportService.uploadProfileImage(profilePic, 'profile');
+        console.log('Profile pic URL:', url);
+        if (url) {
+          uploadedProfilePic = url;
+        }
+      }
+      
+      if (coverPhoto && !coverPhoto.startsWith('http')) {
+        console.log('Uploading cover photo...');
+        const url = await ReportService.uploadProfileImage(coverPhoto, 'cover');
+        console.log('Cover photo URL:', url);
+        if (url) {
+          uploadedCoverPhoto = url;
+        }
+      }
+      
+      const userData = {
         name,
         username: user.email, // Username is now the email address
         mobile,
@@ -265,19 +297,31 @@ function AccountSetupScreen({ navigation, route }) {
         birthday,
         role, // Add role field
         email: user.email,
-        profilePic,
-        coverPhoto,
+        profilePic: uploadedProfilePic,
+        coverPhoto: uploadedCoverPhoto,
         accountStatus: 'active',
         school: 'Cor Jesu College',
         verifiedStudent: true,
         createdAt: new Date(),
         reportsCount: 0, // Initialize trophy counter
         trophies: [], // Array to store earned trophies
-      });
+      };
+      
+      console.log('Saving to Firestore:', userData);
+      
+      await setDoc(doc(db, 'users', user.uid), userData, { merge: true });
+      
+      console.log('Account setup complete!');
+      
+      // Force reload user data from Firestore
+      await refreshUser();
+      console.log('User data refreshed!');
+      
       setLoading(false);
       navigation.replace('Home', { goToAccount: true });
     } catch (e) {
       setLoading(false);
+      console.error('Account setup error:', e);
       alert('Failed to save account info: ' + e.message);
     }
   };
@@ -631,6 +675,7 @@ function LoginScreen({ navigation }) {
         
       } catch (signInError) {
         // If user doesn't exist, create new account
+        // Firebase uses 'auth/invalid-credential' for both wrong password AND non-existent users (security feature)
         if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
           setLoadingMessage('Creating your account...');
           userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -957,6 +1002,7 @@ const AuthUserProvider = ({ children }) => {
           if (userDocSnap.exists()) {
             // Merge Firestore data with Auth data
             const firestoreData = userDocSnap.data();
+            console.log('Firestore data loaded:', firestoreData);
             userData = { ...userData, ...firestoreData };
             
             // Check if user is suspended
@@ -968,8 +1014,11 @@ const AuthUserProvider = ({ children }) => {
               setLoading(false);
               return;
             }
+          } else {
+            console.log('No Firestore document found for user:', firebaseUser.uid);
           }
 
+          console.log('Final user data set:', userData);
           setUser(userData);
         } catch (error) {
           console.error('Error fetching user data:', error);
@@ -996,6 +1045,34 @@ const AuthUserProvider = ({ children }) => {
     loading,
     clearUserData: () => {
       setUser(null);
+    },
+    refreshUser: async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return false;
+        
+        console.log('Manually refreshing user data...');
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          const firestoreData = userDocSnap.data();
+          console.log('Refreshed Firestore data:', firestoreData);
+          const userData = {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+            ...firestoreData
+          };
+          setUser(userData);
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Error refreshing user:', error);
+        return false;
+      }
     },
     updateUser: async (updatedData) => {
       try {
@@ -1110,6 +1187,7 @@ export default function App() {
                 <Stack.Screen name="Report" component={ReportScreen} />
                 <Stack.Screen name="Dashboard" component={DashboardScreen} />
                 <Stack.Screen name="Chat" component={ChatScreen} />
+                <Stack.Screen name="AdminMessaging" component={AdminMessagingScreen} />
                 <Stack.Screen name="PostDetail" component={PostDetailScreen} />
                 <Stack.Screen name="EditProfile" component={EditProfile} />
                 <Stack.Screen name="TestFeedback" component={TestFeedbackScreen} />

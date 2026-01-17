@@ -21,7 +21,8 @@ import {
   ExitToApp as LogoutIcon,
   Menu as MenuIcon,
   AdminPanelSettings as AdminIcon,
-  Feedback as FeedbackIcon
+  Feedback as FeedbackIcon,
+  Chat as ChatIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -33,6 +34,7 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Reports Management', icon: <ReportIcon />, path: '/reports' },
   { text: 'Users Management', icon: <PeopleIcon />, path: '/users' },
+  { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   { text: 'Test Feedback', icon: <FeedbackIcon />, path: '/test-feedback' },
   { text: 'Usage Logs', icon: <FeedbackIcon />, path: '/usage-logs' },

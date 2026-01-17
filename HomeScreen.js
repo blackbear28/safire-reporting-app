@@ -35,6 +35,7 @@ import { fetchRealCJCNews, getOptimizedImageUrl } from './services/webScrapingSe
 import { ProgressiveImage, useLazyLoading, preloadImages } from './components/ProgressiveImage';
 import FastImage from './components/FastImage';
 import { TrophyDisplay } from './components/TrophySystem';
+import CampusNavigatorScreen from './CampusNavigatorScreen';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
@@ -179,7 +180,8 @@ const FeedItem = React.memo(({
       id: item.id,
       anonymous: item.anonymous,
       authorRole: item.authorRole,
-      authorName: item.authorName
+      authorName: item.authorName,
+      authorProfilePic: item.authorProfilePic
     });
   }, []);
   
@@ -187,18 +189,25 @@ const FeedItem = React.memo(({
   <View style={[styles.tweetContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={styles.tweetHeader}>
       <View style={styles.tweetAvatar}>
-        <Ionicons 
-          name={item.anonymous ? 'person-circle-outline' : 'person-circle'} 
-          size={36} 
-          color={item.anonymous ? colors.textSecondary : '#2667ff'} 
-        />
+        {!item.anonymous && item.authorProfilePic ? (
+          <Image 
+            source={{ uri: item.authorProfilePic }} 
+            style={{ width: 36, height: 36, borderRadius: 18 }}
+          />
+        ) : (
+          <Ionicons 
+            name={item.anonymous ? 'person-circle-outline' : 'person-circle'} 
+            size={36} 
+            color={item.anonymous ? colors.textSecondary : '#2667ff'} 
+          />
+        )}
       </View>
       <View style={styles.tweetMainContent}>
         <View style={styles.tweetTopRow}>
           <View style={styles.tweetUserInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.tweetUserName, { color: colors.text }]}>
-                {String(item.anonymous ? 'Anonymous User' : (item.authorName || 'User'))}
+                {item.anonymous ? 'Anonymous User' : (item.authorName || 'User')}
               </Text>
               {!item.anonymous && item.authorRole && (
                 <View style={[
@@ -815,6 +824,28 @@ const ComplaintTab = ({ styles, navigation }) => {
   );
 };
 
+const MessagesTab = ({ styles, navigation, userData, colors }) => {
+  return (
+    <View style={[styles.centerTab, { backgroundColor: colors?.background || '#fff' }]}>
+      <Ionicons name="chatbubbles-outline" size={64} color="#2667ff" />
+      <Text style={[styles.tabTitle, { color: colors?.text || '#000' }]}>Messages</Text>
+      <Text style={[styles.tabSubtitle, { color: colors?.textSecondary || '#666', textAlign: 'center', paddingHorizontal: 40 }]}>
+        Chat with admin support team for help and inquiries
+      </Text>
+      <TouchableOpacity 
+        style={styles.actionButton}
+        onPress={() => navigation.navigate('AdminMessaging')}
+      >
+        <Ionicons name="chatbubbles" size={20} color="#fff" style={{ marginRight: 8 }} />
+        <Text style={styles.actionButtonText}>Start Conversation</Text>
+      </TouchableOpacity>
+      <Text style={[{ color: colors?.textSecondary || '#666', fontSize: 12, marginTop: 16 }]}>
+        Available 24/7
+      </Text>
+    </View>
+  );
+};
+
 const AccountTab = ({ styles, userData, navigation, handleLogout, clearUserData, feedReports, setIndex }) => {
   const { isDarkMode = false, toggleDarkMode = () => {}, colors = { background: '#fff', surface: '#fff', card: '#f0f4ff', text: '#000', textSecondary: '#666', border: '#e0e0e0', inputBackground: '#f5f5f5' } } = useTheme() || {};
   
@@ -1212,8 +1243,10 @@ export default function HomeScreen({ navigation, route }) {
   const [routes] = useState([
     { key: 'home', title: 'Home' },
     { key: 'dashboard', title: 'Dashboard' },
+    { key: 'messages', title: 'Messages' },
     { key: 'plus', title: 'Submit' },
     { key: 'complaint', title: 'Complaint' },
+    { key: 'navigator', title: 'Navigator' },
     { key: 'account', title: 'Account' },
   ]);
   const { user: userData, loading: userLoading, clearUserData } = useUser();
@@ -1310,6 +1343,15 @@ export default function HomeScreen({ navigation, route }) {
 
   // Set up real-time feed subscription
   useEffect(() => {
+    // Only subscribe if user is authenticated
+    if (!userData?.uid) {
+      console.log('No authenticated user - skipping feed subscription');
+      setFeed([]);
+      setFeedLoading(false);
+      setFeedInitialized(true);
+      return;
+    }
+
     console.log('Setting up feed subscription...');
     setFeedLoading(true);
     
@@ -1356,7 +1398,7 @@ export default function HomeScreen({ navigation, route }) {
         unsubscribe();
       }
     };
-  }, []); // Empty dependency array - this effect should only run once
+  }, [userData?.uid]); // Depend on user authentication state
 
   // Set up notifications subscription
   useEffect(() => {
@@ -1958,8 +2000,10 @@ export default function HomeScreen({ navigation, route }) {
       colors={colors}
     />,
     dashboard: () => <DashboardTab navigation={navigation} styles={styles} />,
+    messages: () => <MessagesTab navigation={navigation} styles={styles} userData={userData} colors={colors} />,
     plus: () => <SubmitTab navigation={navigation} styles={styles} />,
     complaint: () => <ComplaintTab navigation={navigation} styles={styles} />,
+    navigator: () => <CampusNavigatorScreen />,
     account: () => <AccountTab 
       userData={userData}
       navigation={navigation}
@@ -1977,9 +2021,11 @@ export default function HomeScreen({ navigation, route }) {
     const featureMap = {
       0: FEATURES.TRACK_STATUS, // Home/Feed tab
       1: FEATURES.ADMIN_DASHBOARD, // Dashboard tab
-      2: FEATURES.SUBMIT_REPORT, // Submit tab
-      3: FEATURES.SUBMIT_FEEDBACK, // Complaint tab
-      4: null // Account tab (don't track as separate feature)
+      2: null, // Messages tab
+      3: FEATURES.SUBMIT_REPORT, // Submit tab
+      4: FEATURES.SUBMIT_FEEDBACK, // Complaint tab
+      5: null, // Navigator tab (don't track as separate feature)
+      6: null // Account tab (don't track as separate feature)
     };
     
     if (featureMap[idx]) {
@@ -2029,39 +2075,68 @@ export default function HomeScreen({ navigation, route }) {
           swipeEnabled
         />
       </View>
-      <View style={[styles.bottomNav, { paddingBottom: insets.bottom + 8, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(0)}>
-          <Ionicons 
-            name={index === 0 ? "home" : "home-outline"} 
-            size={24} 
-            color={index === 0 ? colors.text : colors.textSecondary} 
-          />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(1)}>
-          <Ionicons 
-            name={index === 1 ? "pie-chart" : "pie-chart-outline"} 
-            size={24} 
-            color={index === 1 ? colors.text : colors.textSecondary} 
-          />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navPlusItem} onPress={() => handleNavPress(2)}>
-          <View style={styles.navPlusButton}>
-            <Ionicons name="add" size={26} color="#fff" />
+      
+      {/* Bottom Navigation with Centered Floating Button */}
+      <View style={{ position: 'relative' }}>
+        <View style={[styles.bottomNav, { paddingBottom: insets.bottom + 8, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={styles.navRow}>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(0)}>
+              <Ionicons 
+                name={index === 0 ? "home" : "home-outline"} 
+                size={24} 
+                color={index === 0 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(1)}>
+              <Ionicons 
+                name={index === 1 ? "pie-chart" : "pie-chart-outline"} 
+                size={24} 
+                color={index === 1 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(2)}>
+              <Ionicons 
+                name={index === 2 ? "chatbubbles" : "chatbubbles-outline"} 
+                size={24} 
+                color={index === 2 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(3)}>
-          <Ionicons 
-            name={index === 3 ? "warning" : "warning-outline"} 
-            size={24} 
-            color={index === 3 ? colors.text : colors.textSecondary} 
-          />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(4)}>
-          <Ionicons 
-            name={index === 4 ? "person" : "person-outline"} 
-            size={24} 
-            color={index === 4 ? colors.text : colors.textSecondary} 
-          />
+          <View style={styles.navSpacer} />
+          <View style={styles.navRow}>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(4)}>
+              <Ionicons 
+                name={index === 4 ? "warning" : "warning-outline"} 
+                size={24} 
+                color={index === 4 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(5)}>
+              <Ionicons 
+                name={index === 5 ? "compass" : "compass-outline"} 
+                size={24} 
+                color={index === 5 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(6)}>
+              <Ionicons 
+                name={index === 6 ? "person" : "person-outline"} 
+                size={24} 
+                color={index === 6 ? colors.text : colors.textSecondary} 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        {/* Centered Submit Button */}
+        <TouchableOpacity 
+          style={styles.navPlusItem} 
+          onPress={() => handleNavPress(3)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.navPlusButton}>
+            <Ionicons name="add-circle" size={36} color="#2667ff" />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -2254,6 +2329,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
   actionButtonText: {
     fontFamily: 'Outfit-Bold',
@@ -2414,7 +2490,7 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
@@ -2423,29 +2499,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 10,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  navRow: {
+    flexDirection: 'row',
+    flex: 1,
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+  },
+  navSpacer: {
+    width: 60,
   },
   navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  navPlusItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  navPlusButton: {
-    backgroundColor: '#2667ff',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2667ff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    flex: 1,
+    minWidth: 50,
+  },
+  navPlusItem: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+    pointerEvents: 'box-none',
+  },
+  navPlusButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'auto',
   },
 
   // Notification Modal Styles

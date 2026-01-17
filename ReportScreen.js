@@ -9,7 +9,9 @@ import {
   Alert,
   Platform,
   SafeAreaView,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Modal,
+  StyleSheet
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,6 +56,7 @@ export default function ReportScreen({ navigation, route }) {
   const [building, setBuilding] = useState(editMode && reportData?.location?.building ? reportData.location.building : '');
   const [room, setRoom] = useState(editMode && reportData?.location?.room ? reportData.location.room : '');
   const [loading, setLoading] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
 
   // Smart categorization based on description
   const analyzeText = (text) => {
@@ -193,6 +196,13 @@ export default function ReportScreen({ navigation, route }) {
       }
     }
 
+    // Show warning and confirmation dialog before submitting
+    setShowWarningModal(true);
+  };
+
+  // Process the actual report submission after confirmation
+  const processReportSubmission = async () => {
+
     setLoading(true);
     try {
       const sentiment = analyzeSentiment(description);
@@ -201,14 +211,16 @@ export default function ReportScreen({ navigation, route }) {
       // Debug: Check user data
       console.log('Current user data:', userData);
       console.log('User role:', userData?.role);
+      console.log('User profilePic:', userData?.profilePic);
       
       const reportPayload = {
         userId: isAnonymous ? null : user?.uid,
         authorId: isAnonymous ? null : user?.uid,
-        authorName: isAnonymous ? 'Anonymous' : user?.displayName || user?.email?.split('@')[0] || 'User',
+        authorName: isAnonymous ? 'Anonymous' : (userData?.name || user?.displayName || user?.email?.split('@')[0] || 'User'),
         authorUsername: isAnonymous ? 'anonymous' : user?.email || 'user',
         authorEmail: isAnonymous ? null : user?.email,
         authorRole: isAnonymous ? null : (userData?.role || 'student'),
+        authorProfilePic: isAnonymous ? null : (userData?.profilePic || null),
         title: title.trim(),
         description: description.trim(),
         category: category || 'other',
@@ -237,9 +249,24 @@ export default function ReportScreen({ navigation, route }) {
       }
       
       if (result.success) {
-        // Update usage logger - upgrade feature if media was included
+        // Update usage logger with accurate feature tracking
         if (media.length > 0) {
-          await usageLogger.upgradeToMediaFeature(true);
+          await usageLogger.endFeature(FEATURES.SUBMIT_REPORT_WITH_MEDIA, {
+            mediaCount: media.length,
+            category: category,
+            priority: priority,
+            isAnonymous: isAnonymous,
+            hasLocation: !!location
+          });
+        } else {
+          await usageLogger.endFeature(
+            isAnonymous ? FEATURES.ANONYMOUS_REPORT : FEATURES.SUBMIT_REPORT,
+            {
+              category: category,
+              priority: priority,
+              hasLocation: !!location
+            }
+          );
         }
         
         Alert.alert('Success', editMode ? 'Your report has been updated successfully!' : 'Your report has been submitted successfully!', [
@@ -471,6 +498,207 @@ export default function ReportScreen({ navigation, route }) {
       </View>
     </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Warning Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showWarningModal}
+        onRequestClose={() => setShowWarningModal(false)}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <View style={modalStyles.modalContainer}>
+            <View style={modalStyles.modalHeader}>
+              <Text style={modalStyles.modalIcon}>⚠️</Text>
+              <Text style={modalStyles.modalTitle}>Important Reminder</Text>
+            </View>
+
+            <View style={modalStyles.modalBody}>
+              <View style={modalStyles.reminderSection}>
+                <Text style={modalStyles.sectionTitle}>📋 Please ensure your report:</Text>
+                <Text style={modalStyles.bulletPoint}>• Does not contain inappropriate or offensive images</Text>
+                <Text style={modalStyles.bulletPoint}>• Follows institutional guidelines and policies</Text>
+                <Text style={modalStyles.bulletPoint}>• Contains accurate and truthful information</Text>
+              </View>
+
+              <View style={modalStyles.warningSection}>
+                <Text style={modalStyles.warningText}>
+                  <Text style={modalStyles.warningIcon}>🔍 </Text>
+                  All reports and media are strictly monitored by admins.
+                </Text>
+              </View>
+
+              <View style={modalStyles.penaltySection}>
+                <Text style={modalStyles.penaltyText}>
+                  <Text style={modalStyles.penaltyIcon}>⚖️ </Text>
+                  Violations may result in penalties or disciplinary actions.
+                </Text>
+              </View>
+
+              <Text style={modalStyles.questionText}>
+                Do you want to proceed with submitting this report?
+              </Text>
+            </View>
+
+            <View style={modalStyles.modalButtons}>
+              <TouchableOpacity
+                style={modalStyles.cancelButton}
+                onPress={() => {
+                  setShowWarningModal(false);
+                  console.log('Report submission cancelled by user');
+                }}
+              >
+                <Text style={modalStyles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={modalStyles.submitButton}
+                onPress={() => {
+                  setShowWarningModal(false);
+                  processReportSubmission();
+                }}
+              >
+                <Text style={modalStyles.submitButtonText}>Submit Report</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const modalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    fontFamily: 'Outfit-Bold',
+  },
+  modalBody: {
+    padding: 24,
+  },
+  reminderSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 12,
+    fontFamily: 'Outfit-Bold',
+  },
+  bulletPoint: {
+    fontSize: 14,
+    color: '#34495e',
+    lineHeight: 22,
+    marginBottom: 8,
+    paddingLeft: 8,
+    fontFamily: 'Outfit-Regular',
+  },
+  warningSection: {
+    backgroundColor: '#fff3cd',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#856404',
+    lineHeight: 20,
+    fontFamily: 'Outfit-Regular',
+  },
+  warningIcon: {
+    fontSize: 16,
+  },
+  penaltySection: {
+    backgroundColor: '#f8d7da',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 18,
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc3545',
+  },
+  penaltyText: {
+    fontSize: 14,
+    color: '#721c24',
+    lineHeight: 20,
+    fontFamily: 'Outfit-Regular',
+  },
+  penaltyIcon: {
+    fontSize: 16,
+  },
+  questionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2c3e50',
+    textAlign: 'center',
+    fontFamily: 'Outfit-Bold',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    padding: 16,
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#dc3545',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Outfit-Bold',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Outfit-Bold',
+  },
+});

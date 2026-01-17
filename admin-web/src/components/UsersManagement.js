@@ -50,9 +50,16 @@ import {
   doc, 
   updateDoc,
   deleteDoc,
-  orderBy 
+  orderBy,
+  getDocs,
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase';
+
+// Supabase configuration for deleting profile images
+const SUPABASE_URL = 'https://ghxhfyjjjdtyzxiwwehg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGhmeWpqamR0eXp4aXd3ZWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NjgwMjYsImV4cCI6MjA4NDI0NDAyNn0.xqZnryQb9ShZHTPdBHzQGyID6PsQeHiAfn2CEc4rKg0';
+const STORAGE_BUCKET = 'report-images';
 
 export default function UsersManagement({ userRole }) {
   const [users, setUsers] = useState([]);
@@ -184,12 +191,101 @@ export default function UsersManagement({ userRole }) {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      try {
-        await deleteDoc(doc(db, 'users', userId));
-      } catch (error) {
-        console.error('Error deleting user:', error);
+    const userToDelete = users.find(u => u.id === userId);
+    
+    if (!window.confirm(
+      `Are you sure you want to permanently delete ${userToDelete?.name || 'this user'}?\n\n` +
+      `This will delete:\n` +
+      `• User account from Firebase Authentication\n` +
+      `• User profile from Firestore\n` +
+      `• All user reports\n` +
+      `• Profile pictures from Supabase\n\n` +
+      `This action CANNOT be undone!`
+    )) {
+      return;
+    }
+
+    try {
+      setSnackbar({ open: true, message: 'Deleting user...', severity: 'info' });
+
+      // 1. Delete user's profile pictures from Supabase
+      if (userToDelete?.profilePic || userToDelete?.coverPhoto) {
+        try {
+          const deletePromises = [];
+          
+          if (userToDelete.profilePic && userToDelete.profilePic.includes('supabase.co')) {
+            const profilePath = userToDelete.profilePic.split(`${STORAGE_BUCKET}/`)[1];
+            if (profilePath) {
+              deletePromises.push(
+                fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${profilePath}`, {
+                  method: 'DELETE',
+                  headers: {
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_ANON_KEY
+                  }
+                })
+              );
+            }
+          }
+          
+          if (userToDelete.coverPhoto && userToDelete.coverPhoto.includes('supabase.co')) {
+            const coverPath = userToDelete.coverPhoto.split(`${STORAGE_BUCKET}/`)[1];
+            if (coverPath) {
+              deletePromises.push(
+                fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${coverPath}`, {
+                  method: 'DELETE',
+                  headers: {
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_ANON_KEY
+                  }
+                })
+              );
+            }
+          }
+          
+          if (deletePromises.length > 0) {
+            await Promise.all(deletePromises);
+            console.log('Profile images deleted from Supabase');
+          }
+        } catch (error) {
+          console.error('Error deleting Supabase images:', error);
+          // Continue even if image deletion fails
+        }
       }
+
+      // 2. Delete user's reports from Firestore
+      try {
+        const reportsQuery = query(collection(db, 'reports'), where('authorId', '==', userId));
+        const reportsSnapshot = await getDocs(reportsQuery);
+        const deleteReportsPromises = reportsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deleteReportsPromises);
+        console.log(`Deleted ${reportsSnapshot.docs.length} reports`);
+      } catch (error) {
+        console.error('Error deleting user reports:', error);
+      }
+
+      // 3. Delete user document from Firestore
+      await deleteDoc(doc(db, 'users', userId));
+      console.log('User document deleted from Firestore');
+
+      // 4. Delete from Firebase Authentication
+      // Note: This requires Firebase Admin SDK on backend OR the Cloud Functions approach
+      // For now, we'll make a note that admin needs to manually delete from Auth
+      // OR you can set up a Cloud Function triggered by Firestore delete
+      
+      setSnackbar({ 
+        open: true, 
+        message: `User deleted successfully! Note: Please also delete this user from Firebase Authentication Console.`, 
+        severity: 'success' 
+      });
+      
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setSnackbar({ 
+        open: true, 
+        message: `Error deleting user: ${error.message}`, 
+        severity: 'error' 
+      });
     }
   };
 

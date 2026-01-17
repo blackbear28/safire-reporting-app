@@ -363,6 +363,46 @@ export default function ReportsManagement({ userRole }) {
                   </Typography>
                 </Box>
 
+                {/* Display media images if available */}
+                {report.media && report.media.length > 0 && (
+                  <Box sx={{ mb: 2, display: 'flex', gap: 1, overflow: 'auto' }}>
+                    {report.media.slice(0, 3).map((imageUrl, index) => (
+                      <Box
+                        key={index}
+                        component="img"
+                        src={imageUrl}
+                        alt={`Report media ${index + 1}`}
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          objectFit: 'cover',
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          '&:hover': { opacity: 0.8 }
+                        }}
+                        onClick={() => window.open(imageUrl, '_blank')}
+                      />
+                    ))}
+                    {report.media.length > 3 && (
+                      <Box
+                        sx={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 1,
+                          bgcolor: 'grey.200',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Typography variant="caption">
+                          +{report.media.length - 3}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+
                 <Box sx={{ mb: 2 }}>
                   <Chip 
                     label={report.status || 'pending'} 

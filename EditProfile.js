@@ -7,13 +7,18 @@ import {
   TouchableOpacity, 
   TextInput, 
   ScrollView, 
-  ActivityIndicator
+  ActivityIndicator,
+  Image,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { useUser } from './App';
+import { launchImageLibraryAsync, MediaTypeOptions } from 'expo-image-picker';
+import { ReportService } from './services/reportService';
 
 export default function EditProfile({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -27,6 +32,8 @@ export default function EditProfile({ navigation }) {
     address: userData?.address || '',
     about: userData?.about || ''
   });
+  const [profilePic, setProfilePic] = useState(userData?.profilePic || null);
+  const [coverPhoto, setCoverPhoto] = useState(userData?.coverPhoto || null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -40,6 +47,8 @@ export default function EditProfile({ navigation }) {
         address: userData.address || '',
         about: userData.about || ''
       });
+      setProfilePic(userData.profilePic || null);
+      setCoverPhoto(userData.coverPhoto || null);
     }
   }, [userData]);
 
@@ -50,9 +59,46 @@ export default function EditProfile({ navigation }) {
     }));
   };
 
+  const pickImage = async (type) => {
+    let result = await launchImageLibraryAsync({
+      mediaTypes: MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: type === 'profile' ? [1, 1] : [16, 9],
+      quality: 0.8,
+    });
+    
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (type === 'profile') {
+        setProfilePic(result.assets[0].uri);
+      } else {
+        setCoverPhoto(result.assets[0].uri);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
+      
+      // Upload images to Supabase if they're local URIs
+      let uploadedProfilePic = profilePic;
+      let uploadedCoverPhoto = coverPhoto;
+      
+      if (profilePic && !profilePic.startsWith('http')) {
+        Alert.alert('Uploading', 'Uploading profile picture...');
+        const url = await ReportService.uploadProfileImage(profilePic, 'profile');
+        if (url) {
+          uploadedProfilePic = url;
+        }
+      }
+      
+      if (coverPhoto && !coverPhoto.startsWith('http')) {
+        Alert.alert('Uploading', 'Uploading cover photo...');
+        const url = await ReportService.uploadProfileImage(coverPhoto, 'cover');
+        if (url) {
+          uploadedCoverPhoto = url;
+        }
+      }
       
       // Update Firebase Auth user
       await updateProfile(auth.currentUser, {
@@ -66,12 +112,40 @@ export default function EditProfile({ navigation }) {
         birthday: formData.birthday,
         mobile: formData.mobile,
         address: formData.address,
-        about: formData.about
+        about: formData.about,
+        profilePic: uploadedProfilePic,
+        coverPhoto: uploadedCoverPhoto
       });
 
+      // Update all user's posts with new profile picture if it changed
+      if (uploadedProfilePic && uploadedProfilePic !== userData?.profilePic) {
+        try {
+          console.log('Updating profile picture in all posts...');
+          const reportsRef = collection(db, 'reports');
+          const q = query(reportsRef, where('authorId', '==', auth.currentUser.uid));
+          const snapshot = await getDocs(q);
+          
+          const updatePromises = snapshot.docs.map(docSnapshot => {
+            const reportRef = doc(db, 'reports', docSnapshot.id);
+            return updateDoc(reportRef, { 
+              authorProfilePic: uploadedProfilePic,
+              authorName: formData.name // Also update name if it changed
+            });
+          });
+          
+          await Promise.all(updatePromises);
+          console.log(`Updated ${snapshot.docs.length} posts with new profile picture`);
+        } catch (error) {
+          console.error('Error updating posts with new profile picture:', error);
+          // Don't show error to user since profile update was successful
+        }
+      }
+
+      Alert.alert('Success', 'Profile updated successfully!');
       navigation.goBack();
     } catch (error) {
       console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -91,6 +165,42 @@ export default function EditProfile({ navigation }) {
         </View>
 
         <View style={[styles.formContainer, { paddingBottom: 20 }]}>
+          {/* Profile Picture */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Profile Picture</Text>
+            <TouchableOpacity 
+              style={styles.imagePickerButton}
+              onPress={() => pickImage('profile')}
+            >
+              {profilePic ? (
+                <Image source={{ uri: profilePic }} style={styles.previewImage} />
+              ) : (
+                <View style={styles.placeholderImage}>
+                  <Ionicons name="camera" size={32} color="#666" />
+                  <Text style={styles.placeholderText}>Tap to upload</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Cover Photo */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Cover Photo</Text>
+            <TouchableOpacity 
+              style={styles.imagePickerButtonWide}
+              onPress={() => pickImage('cover')}
+            >
+              {coverPhoto ? (
+                <Image source={{ uri: coverPhoto }} style={styles.previewImageWide} />
+              ) : (
+                <View style={styles.placeholderImageWide}>
+                  <Ionicons name="camera" size={32} color="#666" />
+                  <Text style={styles.placeholderText}>Tap to upload cover</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email (GSuite Account)</Text>
             <TextInput
@@ -240,5 +350,50 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Outfit-Bold',
     fontSize: 16,
+  },
+  imagePickerButton: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  imagePickerButtonWide: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewImageWide: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderImage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderImageWide: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    fontFamily: 'Outfit-Regular',
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
   },
 });

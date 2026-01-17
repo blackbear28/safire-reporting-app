@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { supabase, STORAGE_BUCKET } from '../supabase';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export class ReportService {
   
@@ -30,50 +30,107 @@ export class ReportService {
       for (let i = 0; i < images.length; i++) {
         const imageUri = images[i];
         
-        // Read file as base64 using expo-file-system
+        // Read file as base64
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: 'base64',
+          encoding: FileSystem.EncodingType.Base64,
         });
-        
-        // Convert base64 to blob
-        const byteCharacters = atob(base64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let j = 0; j < byteCharacters.length; j++) {
-          byteNumbers[j] = byteCharacters.charCodeAt(j);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
         
         // Create a unique filename
         const timestamp = Date.now();
         const filename = `${timestamp}_${i}.jpg`;
         const filePath = `reports/${filename}`;
         
-        // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(filePath, blob, {
-            contentType: 'image/jpeg',
-            cacheControl: '3600',
-          });
-        
-        if (error) {
-          console.error('Supabase upload error:', error);
-          throw error;
+        // Convert base64 to binary array manually
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let j = 0; j < binaryString.length; j++) {
+          bytes[j] = binaryString.charCodeAt(j);
         }
         
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from(STORAGE_BUCKET)
-          .getPublicUrl(filePath);
+        // Upload using XMLHttpRequest (better React Native support)
+        const uploadUrl = `https://ghxhfyjjjdtyzxiwwehg.supabase.co/storage/v1/object/${STORAGE_BUCKET}/${filePath}`;
         
-        imageUrls.push(urlData.publicUrl);
+        const uploaded = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', uploadUrl);
+          xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGhmeWpqamR0eXp4aXd3ZWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NjgwMjYsImV4cCI6MjA4NDI0NDAyNn0.xqZnryQb9ShZHTPdBHzQGyID6PsQeHiAfn2CEc4rKg0');
+          xhr.setRequestHeader('apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGhmeWpqamR0eXp4aXd3ZWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NjgwMjYsImV4cCI6MjA4NDI0NDAyNn0.xqZnryQb9ShZHTPdBHzQGyID6PsQeHiAfn2CEc4rKg0');
+          xhr.setRequestHeader('Content-Type', 'image/jpeg');
+          
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(true);
+            } else {
+              reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`));
+            }
+          };
+          
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(bytes);
+        });
+        
+        // Construct public URL
+        const publicUrl = `https://ghxhfyjjjdtyzxiwwehg.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${filePath}`;
+        imageUrls.push(publicUrl);
       }
       
       return { success: true, urls: imageUrls };
     } catch (error) {
       console.error('Error uploading images:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  // Upload single profile image (profile pic or cover photo)
+  static async uploadProfileImage(imageUri, type = 'profile') {
+    try {
+      if (!imageUri) return null;
+
+      // Read file as base64
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      // Create a unique filename
+      const timestamp = Date.now();
+      const filename = `${type}_${timestamp}.jpg`;
+      const filePath = `profiles/${filename}`;
+      
+      // Convert base64 to binary array manually
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let j = 0; j < binaryString.length; j++) {
+        bytes[j] = binaryString.charCodeAt(j);
+      }
+      
+      // Upload using XMLHttpRequest (better React Native support)
+      const uploadUrl = `https://ghxhfyjjjdtyzxiwwehg.supabase.co/storage/v1/object/${STORAGE_BUCKET}/${filePath}`;
+      
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl);
+        xhr.setRequestHeader('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGhmeWpqamR0eXp4aXd3ZWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NjgwMjYsImV4cCI6MjA4NDI0NDAyNn0.xqZnryQb9ShZHTPdBHzQGyID6PsQeHiAfn2CEc4rKg0');
+        xhr.setRequestHeader('apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGhmeWpqamR0eXp4aXd3ZWhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NjgwMjYsImV4cCI6MjA4NDI0NDAyNn0.xqZnryQb9ShZHTPdBHzQGyID6PsQeHiAfn2CEc4rKg0');
+        xhr.setRequestHeader('Content-Type', 'image/jpeg');
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(true);
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`));
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(bytes);
+      });
+      
+      // Construct public URL
+      const publicUrl = `https://ghxhfyjjjdtyzxiwwehg.supabase.co/storage/v1/object/public/${STORAGE_BUCKET}/${filePath}`;
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      return null;
     }
   }
   
@@ -370,6 +427,8 @@ export class ReportService {
               authorUsername: data.authorUsername || 'user',
               authorEmail: data.authorEmail || '',
               authorId: data.authorId || '',
+              authorRole: data.authorRole || null,
+              authorProfilePic: data.authorProfilePic || null,
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date()),
               upvotes: Number(data.upvotes) || 0,
               viewCount: Number(data.viewCount) || 0,

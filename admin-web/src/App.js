@@ -19,6 +19,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import CreateAdminUser from './components/CreateAdminUser';
 import TestFeedbackLogs from './components/TestFeedbackLogs';
 import UsageLogs from './components/UsageLogs';
+import MessagesManagement from './components/MessagesManagement';
 
 // Theme configuration
 const theme = createTheme({
@@ -140,6 +141,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard userRole={userRole} />} />
               <Route path="/reports" element={<ReportsManagement userRole={userRole} />} />
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
+              <Route path="/messages" element={<MessagesManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
               <Route path="/test-feedback" element={<TestFeedbackLogs userRole={userRole} />} />
               <Route path="/usage-logs" element={<UsageLogs />} />
