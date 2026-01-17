@@ -1,0 +1,304 @@
+.usage-logs-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.usage-logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.usage-logs-header h2 {
+  font-size: 28px;
+  color: #333;
+  margin: 0;
+}
+
+.refresh-button {
+  background-color: #2667ff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.3s;
+}
+
+.refresh-button:hover {
+  background-color: #1a4fd6;
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 18px;
+  color: #666;
+}
+
+.no-logs {
+  text-align: center;
+  padding: 60px 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  color: #666;
+}
+
+.logs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.log-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.log-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.log-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.log-card-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #2667ff;
+  font-weight: 700;
+}
+
+.role-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.role-badge.student {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.role-badge.faculty {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.role-badge.admin {
+  background-color: #fce4ec;
+  color: #c2185b;
+}
+
+.log-card-body {
+  margin-bottom: 15px;
+}
+
+.log-card-body p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #555;
+}
+
+.log-card-body strong {
+  color: #333;
+  font-weight: 600;
+}
+
+.log-card-tasks {
+  margin: 15px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.log-card-tasks strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 14px;
+}
+
+.log-card-tasks ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.log-card-tasks li {
+  font-size: 13px;
+  color: #666;
+  margin: 4px 0;
+}
+
+.log-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.log-card-actions button {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.view-button {
+  background-color: #2667ff;
+  color: white;
+}
+
+.view-button:hover {
+  background-color: #1a4fd6;
+}
+
+.download-button {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.download-button:hover {
+  background-color: #45a049;
+}
+
+.copy-button {
+  background-color: #ff9800;
+  color: white;
+}
+
+.copy-button:hover {
+  background-color: #f57c00;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-body pre {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-footer button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+@media (max-width: 768px) {
+  .logs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .log-card-actions {
+    flex-direction: column;
+  }
+
+  .log-card-actions button {
+    width: 100%;
+  }
+}

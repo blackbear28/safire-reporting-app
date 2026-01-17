@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "Safire",
+    "slug": "safire-app-new",
+    "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "enabled": false
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "packagerOpts": {
+      "config": "metro.config.js"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.invictus28.safireapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.invictus28.safireapp",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "VIBRATE"
+      ],
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "buildToolsVersion": "35.0.0",
+      "allowBackup": false,
+      "hardwareAccelerated": true,
+      "versionCode": 1,
+      "enableProguard": true,
+      "enableHermes": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Outfit-Regular.ttf",
+            "./assets/fonts/Outfit-Bold.ttf",
+            "./assets/fonts/Outfit-Medium.ttf",
+            "./assets/fonts/Outfit-Light.ttf",
+            "./assets/fonts/Outfit-SemiBold.ttf",
+            "./assets/fonts/Outfit-ExtraBold.ttf",
+            "./assets/fonts/Outfit-Black.ttf",
+            "./assets/fonts/Outfit-Thin.ttf",
+            "./assets/fonts/Outfit-ExtraLight.ttf"
+          ]
+        }
+      ],
+      "./plugins/withAsyncStorage.js",
+      "./plugins/withGestureHandler.js"
+    ],
+    "owner": "invictus28",
+    "extra": {
+      "eas": {
+        "projectId": "a901cff3-72fa-419b-a26d-29615a025c1a"
+      }
+    }
+  }
+}
