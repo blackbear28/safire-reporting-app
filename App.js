@@ -689,6 +689,11 @@ function LoginScreen({ navigation }) {
             verifiedStudent: true
           });
 
+          // Initialize usage logger for new user
+          const testCode = `USER_${userCredential.user.uid.substring(0, 8)}_${Date.now()}`;
+          await usageLogger.initSession(testCode, userCredential.user.uid, email, 'User');
+          await usageLogger.startFeature(FEATURES.LOGIN);
+
           setLoadingMessage('Account created! 🎓');
           setTimeout(() => {
             setLoading(false);
