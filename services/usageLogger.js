@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { AppState } from 'react-native';
 
 const STORAGE_KEY = 'usage_log_session';
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 // Feature mapping for tracking
 const FEATURES = {
@@ -40,6 +42,13 @@ class UsageLogger {
     this.sessionLogs = [];
     this.sessionStartTime = null;
     this.testUserCode = null;
+    this.appStateSubscription = null;
+    this.inactivityTimer = null;
+    this.lastActivityTime = new Date();
+    this.isBackgrounded = false;
+    
+    // Set up app state listener
+    this.setupAppStateListener();
   }
 
   // Initialize session with test user code
@@ -50,6 +59,8 @@ class UsageLogger {
     this.userId = userId;
     this.userEmail = userEmail;
     this.userRole = userRole;
+    this.lastActivityTime = new Date();
+    this.isBackgrounded = false;
 
     // Save to AsyncStorage
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -58,10 +69,113 @@ class UsageLogger {
       userEmail,
       userRole,
       sessionStartTime: this.sessionStartTime.toISOString(),
+      lastActivityTime: this.lastActivityTime.toISOString(),
       logs: []
     }));
 
+    // Start inactivity detection
+    this.startInactivityDetection();
+
     console.log('Usage logger session initialized:', testUserCode);
+  }
+
+  // Set up app state listener to detect when app goes to background
+  setupAppStateListener() {
+    this.appStateSubscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('App went to background/inactive - auto-completing session');
+        this.isBackgrounded = true;
+        await this.autoCompleteSession('App closed or backgrounded');
+      } else if (nextAppState === 'active') {
+        console.log('App became active');
+        this.isBackgrounded = false;
+        // Check if we have a pending session that wasn't uploaded
+        const hasSession = await this.loadSession();
+        if (hasSession) {
+          console.log('Resuming previous session');
+          this.lastActivityTime = new Date();
+        }
+      }
+    });
+  }
+
+  // Start inactivity detection
+  startInactivityDetection() {
+    this.stopInactivityDetection();
+    
+    this.inactivityTimer = setInterval(async () => {
+      const now = new Date();
+      const inactiveTime = now - this.lastActivityTime;
+      
+      if (inactiveTime >= INACTIVITY_TIMEOUT && !this.isBackgrounded) {
+        console.log('User inactive for 30 minutes - auto-completing session');
+        await this.autoCompleteSession('User inactive for 30+ minutes');
+      }
+    }, 60000); // Check every minute
+  }
+
+  // Stop inactivity detection
+  stopInactivityDetection() {
+    if (this.inactivityTimer) {
+      clearInterval(this.inactivityTimer);
+      this.inactivityTimer = null;
+    }
+  }
+
+  // Update last activity time
+  updateActivity() {
+    this.lastActivityTime = new Date();
+  }
+
+  // Auto-complete session (for background/inactivity)
+  async autoCompleteSession(reason) {
+    if (!this.testUserCode) {
+      return;
+    }
+
+    try {
+      // End current feature if any
+      if (this.currentFeature) {
+        await this.endFeature('Auto-saved due to app closure', reason);
+      }
+
+      if (this.sessionLogs.length === 0) {
+        console.log('No session logs to save');
+        return;
+      }
+
+      const sessionEndTime = new Date();
+      const totalDuration = (sessionEndTime - this.sessionStartTime) / 60000; // minutes
+
+      // Prepare document for Firebase
+      const sessionDocument = {
+        testUserCode: this.testUserCode,
+        userId: this.userId,
+        userEmail: this.userEmail,
+        userRole: this.userRole,
+        sessionStartTime: this.sessionStartTime.toISOString(),
+        sessionEndTime: sessionEndTime.toISOString(),
+        totalDurationMinutes: parseFloat(totalDuration.toFixed(2)),
+        logs: this.sessionLogs,
+        autoCompleted: true,
+        completionReason: reason,
+        timestamp: serverTimestamp(),
+        createdAt: new Date().toISOString()
+      };
+
+      // Upload to Firebase
+      const docRef = await addDoc(collection(db, 'usageLogs'), sessionDocument);
+      console.log('Usage log auto-uploaded to Firebase:', docRef.id);
+
+      // Clear session
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      this.reset();
+
+      return docRef.id;
+    } catch (error) {
+      console.error('Error auto-completing usage logger session:', error);
+      // Don't throw - we don't want to crash the app when backgrounding
+    }
   }
 
   // Load existing session
@@ -76,6 +190,11 @@ class UsageLogger {
         this.userId = parsed.userId;
         this.userEmail = parsed.userEmail;
         this.userRole = parsed.userRole;
+        this.lastActivityTime = parsed.lastActivityTime ? new Date(parsed.lastActivityTime) : new Date();
+        
+        // Restart inactivity detection
+        this.startInactivityDetection();
+        
         console.log('Usage logger session loaded');
         return true;
       }
@@ -88,6 +207,9 @@ class UsageLogger {
 
   // Start tracking a feature
   async startFeature(featureKey, additionalData = {}) {
+    // Update activity time
+    this.updateActivity();
+    
     // End current feature if exists
     if (this.currentFeature) {
       await this.endFeature();
@@ -138,6 +260,9 @@ class UsageLogger {
   async endFeature(success = 'Successful, no assistance', issues = '') {
     if (!this.currentFeature) return;
 
+    // Update activity time
+    this.updateActivity();
+
     const endTime = new Date();
     const durationMs = endTime - this.currentFeature.startTime;
     const durationMinutes = (durationMs / 60000).toFixed(2); // Convert to minutes
@@ -173,6 +298,7 @@ class UsageLogger {
         userEmail: this.userEmail,
         userRole: this.userRole,
         sessionStartTime: this.sessionStartTime?.toISOString(),
+        lastActivityTime: this.lastActivityTime?.toISOString(),
         logs: this.sessionLogs
       }));
     } catch (error) {
@@ -180,8 +306,11 @@ class UsageLogger {
     }
   }
 
-  // Complete session and upload to Firebase
+  // Complete session and upload to Firebase (manual logout)
   async completeSession() {
+    // Stop inactivity detection
+    this.stopInactivityDetection();
+    
     // End current feature if any
     if (this.currentFeature) {
       await this.endFeature();
@@ -206,6 +335,8 @@ class UsageLogger {
         sessionEndTime: sessionEndTime.toISOString(),
         totalDurationMinutes: parseFloat(totalDuration.toFixed(2)),
         logs: this.sessionLogs,
+        autoCompleted: false,
+        completionReason: 'Manual logout',
         timestamp: serverTimestamp(),
         createdAt: new Date().toISOString()
       };
@@ -272,6 +403,7 @@ class UsageLogger {
 
   // Reset logger
   reset() {
+    this.stopInactivityDetection();
     this.currentFeature = null;
     this.sessionLogs = [];
     this.sessionStartTime = null;
@@ -279,6 +411,17 @@ class UsageLogger {
     this.userId = null;
     this.userEmail = null;
     this.userRole = null;
+    this.lastActivityTime = new Date();
+    this.isBackgrounded = false;
+  }
+
+  // Cleanup (call this when app is being destroyed)
+  cleanup() {
+    this.stopInactivityDetection();
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
   }
 
   // Get current session info

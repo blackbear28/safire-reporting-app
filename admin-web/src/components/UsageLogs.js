@@ -44,6 +44,12 @@ const UsageLogs = () => {
     txt += `Session Start: ${new Date(log.sessionStartTime).toLocaleString()}\n`;
     txt += `Session End: ${new Date(log.sessionEndTime).toLocaleString()}\n`;
     txt += `Total Duration: ${log.totalDurationMinutes} minutes\n`;
+    if (log.autoCompleted) {
+      txt += `Session Type: Auto-completed\n`;
+      txt += `Completion Reason: ${log.completionReason}\n`;
+    } else {
+      txt += `Session Type: Manual logout\n`;
+    }
     txt += `\n========================================\n`;
     txt += `Task Completion Data Collection Instrument\n`;
     txt += `========================================\n\n`;
@@ -151,9 +157,16 @@ const UsageLogs = () => {
             <div key={log.id} className="log-card">
               <div className="log-card-header">
                 <h3>{log.testUserCode}</h3>
-                <span className={`role-badge ${log.userRole?.toLowerCase()}`}>
-                  {log.userRole}
-                </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span className={`role-badge ${log.userRole?.toLowerCase()}`}>
+                    {log.userRole}
+                  </span>
+                  {log.autoCompleted && (
+                    <span className="auto-badge" title={log.completionReason}>
+                      🤖 Auto
+                    </span>
+                  )}
+                </div>
               </div>
               
               <div className="log-card-body">
@@ -162,6 +175,11 @@ const UsageLogs = () => {
                 <p><strong>Session End:</strong> {new Date(log.sessionEndTime).toLocaleString()}</p>
                 <p><strong>Total Duration:</strong> {log.totalDurationMinutes} min</p>
                 <p><strong>Features Used:</strong> {log.logs?.length || 0}</p>
+                {log.autoCompleted && (
+                  <p style={{ color: '#f57c00', fontSize: '0.9em', marginTop: '8px' }}>
+                    <strong>📱 {log.completionReason || 'Auto-completed'}</strong>
+                  </p>
+                )}
               </div>
 
               <div className="log-card-tasks">

@@ -7,7 +7,7 @@ import {
   Card,
   CardContent,
   Chip,
-  LinearProgress
+  LinearProgress,
 } from '@mui/material';
 import {
   Report as ReportIcon,
@@ -15,9 +15,9 @@ import {
   CheckCircle as CheckIcon,
   Pending as PendingIcon,
   TrendingUp as TrendingIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
 } from '@mui/icons-material';
-import { collection, query, onSnapshot, where } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function Dashboard({ userRole }) {
@@ -92,24 +92,88 @@ export default function Dashboard({ userRole }) {
     };
   }, []);
 
-  const StatCard = ({ title, value, icon, color = 'primary', subtitle }) => (
-    <Card elevation={2}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Box sx={{ color: `${color}.main`, mr: 1 }}>
-            {icon}
+  const StatCard = ({ title, value, icon, color = 'primary', subtitle, trend }) => (
+    <Card 
+      elevation={0}
+      sx={{ 
+        height: '100%',
+        border: '1px solid #e8eaed',
+        borderRadius: 2,
+        transition: 'all 0.2s',
+        '&:hover': {
+          boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15)',
+          borderColor: '#dadce0',
+        }
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+          <Box>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                color: '#5f6368',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                mb: 1,
+              }}
+            >
+              {title}
+            </Typography>
+            <Typography 
+              variant="h4" 
+              sx={{ 
+                color: '#202124',
+                fontSize: '2rem',
+                fontWeight: 600,
+                lineHeight: 1,
+              }}
+            >
+              {loading ? '-' : value.toLocaleString()}
+            </Typography>
           </Box>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            {title}
-          </Typography>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              backgroundColor: `${color}.light`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 0.15,
+            }}
+          >
+            {React.cloneElement(icon, { 
+              sx: { fontSize: 24, color: `${color}.main`, opacity: 1 } 
+            })}
+          </Box>
         </Box>
-        <Typography variant="h4" component="div" color={`${color}.main`}>
-          {loading ? '-' : value}
-        </Typography>
         {subtitle && (
-          <Typography variant="body2" color="text.secondary">
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              color: '#5f6368',
+              fontSize: '0.75rem',
+            }}
+          >
             {subtitle}
           </Typography>
+        )}
+        {trend && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <TrendingIcon sx={{ fontSize: 16, color: trend > 0 ? '#34a853' : '#ea4335', mr: 0.5 }} />
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: trend > 0 ? '#34a853' : '#ea4335',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+              }}
+            >
+              {trend > 0 ? '+' : ''}{trend}% from last period
+            </Typography>
+          </Box>
         )}
       </CardContent>
     </Card>
@@ -134,15 +198,32 @@ export default function Dashboard({ userRole }) {
   };
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Admin Dashboard
-      </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Welcome back! Here's what's happening with your school reporting system.
-      </Typography>
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            color: '#202124',
+            fontSize: '1.75rem',
+            fontWeight: 600,
+            mb: 0.5,
+          }}
+        >
+          Dashboard
+        </Typography>
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: '#5f6368',
+            fontSize: '0.875rem',
+          }}
+        >
+          Welcome back! Here's what's happening with your school reporting system.
+        </Typography>
+      </Box>
 
-      {loading && <LinearProgress sx={{ mb: 3 }} />}
+      {loading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
 
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -203,9 +284,18 @@ export default function Dashboard({ userRole }) {
       </Grid>
 
       {/* Anti-False Reporting Statistics */}
-      <Typography variant="h5" gutterBottom sx={{ mt: 2, mb: 2 }}>
-        Anti-False Reporting Statistics
-      </Typography>
+      <Box sx={{ mb: 3 }}>
+        <Typography 
+          variant="h5" 
+          sx={{ 
+            color: '#202124',
+            fontSize: '1.25rem',
+            fontWeight: 600,
+            mb: 2,
+          }}
+        >
+          Anti-False Reporting Statistics
+        </Typography>
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -262,50 +352,109 @@ export default function Dashboard({ userRole }) {
           />
         </Grid>
       </Grid>
+      </Box>
 
       {/* Recent Reports */}
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper 
+        elevation={0}
+        sx={{ 
+          p: 3,
+          border: '1px solid #e8eaed',
+          borderRadius: 2,
+        }}
+      >
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            color: '#202124',
+            fontSize: '1.125rem',
+            fontWeight: 600,
+            mb: 2,
+          }}
+        >
           Recent Reports
         </Typography>
         {recentReports.length === 0 ? (
-          <Typography color="text.secondary">
-            No reports available
-          </Typography>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <ReportIcon sx={{ fontSize: 48, color: '#dadce0', mb: 1 }} />
+            <Typography sx={{ color: '#5f6368', fontSize: '0.875rem' }}>
+              No reports available
+            </Typography>
+          </Box>
         ) : (
           <Box>
-            {recentReports.map((report) => (
+            {recentReports.map((report, index) => (
               <Box
                 key={report.id}
                 sx={{
                   p: 2,
-                  mb: 2,
-                  border: 1,
-                  borderColor: 'grey.200',
-                  borderRadius: 1,
-                  '&:last-child': { mb: 0 }
+                  mb: index < recentReports.length - 1 ? 2 : 0,
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: 2,
+                  border: '1px solid #e8eaed',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    backgroundColor: '#ffffff',
+                    boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+                  }
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                  <Typography 
+                    variant="subtitle1" 
+                    sx={{ 
+                      flexGrow: 1,
+                      color: '#202124',
+                      fontSize: '0.9375rem',
+                      fontWeight: 500,
+                    }}
+                  >
                     {report.title || 'Untitled Report'}
                   </Typography>
                   <Chip
                     label={report.status || 'pending'}
                     color={getStatusColor(report.status)}
                     size="small"
-                    sx={{ mr: 1 }}
+                    sx={{ 
+                      mr: 1,
+                      height: 24,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                    }}
                   />
                   <Chip
                     label={report.priority || 'medium'}
                     color={getPriorityColor(report.priority)}
                     size="small"
+                    sx={{ 
+                      height: 24,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                    }}
                   />
                 </Box>
-                <Typography variant="body2" color="text.secondary" noWrap>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: '#5f6368',
+                    fontSize: '0.8125rem',
+                    mb: 0.5,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                  }}
+                >
                   {report.description || 'No description provided'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: '#80868b',
+                    fontSize: '0.75rem',
+                  }}
+                >
                   {report.createdAt?.toDate()?.toLocaleString() || 'Unknown date'} • 
                   Category: {report.category || 'General'}
                 </Typography>

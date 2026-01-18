@@ -21,30 +21,161 @@ import TestFeedbackLogs from './components/TestFeedbackLogs';
 import UsageLogs from './components/UsageLogs';
 import MessagesManagement from './components/MessagesManagement';
 
-// Theme configuration
+// Theme configuration - Google Cloud Console inspired
 const theme = createTheme({
   palette: {
+    mode: 'light',
     primary: {
-      main: '#1976d2',
-      dark: '#115293',
-      light: '#42a5f5'
+      main: '#1a73e8', // Google Blue
+      dark: '#1557b0',
+      light: '#4285f4',
+      contrastText: '#ffffff',
     },
     secondary: {
-      main: '#dc004e'
+      main: '#ea4335', // Google Red
+      light: '#ff6659',
+      dark: '#c5221f',
+    },
+    success: {
+      main: '#34a853', // Google Green
+      light: '#57bb7e',
+      dark: '#0d9e3b',
+    },
+    warning: {
+      main: '#fbbc04', // Google Yellow
+      light: '#fdd663',
+      dark: '#f9ab00',
     },
     background: {
-      default: '#f5f5f5'
-    }
+      default: '#f8f9fa',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#202124',
+      secondary: '#5f6368',
+    },
+    divider: '#e8eaed',
   },
   typography: {
-    fontFamily: 'Roboto, Arial, sans-serif',
+    fontFamily: '"Outfit", "Google Sans", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontSize: '2.125rem',
+      fontWeight: 600,
+      letterSpacing: '-0.01562em',
+      color: '#202124',
+    },
+    h2: {
+      fontSize: '1.75rem',
+      fontWeight: 600,
+      letterSpacing: '-0.00833em',
+      color: '#202124',
+    },
+    h3: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      letterSpacing: '0em',
+      color: '#202124',
+    },
     h4: {
-      fontWeight: 600
+      fontSize: '1.25rem',
+      fontWeight: 600,
+      letterSpacing: '0.0075em',
+      color: '#202124',
+    },
+    h5: {
+      fontSize: '1.125rem',
+      fontWeight: 600,
+      letterSpacing: '0em',
+      color: '#202124',
     },
     h6: {
-      fontWeight: 500
-    }
-  }
+      fontSize: '1rem',
+      fontWeight: 600,
+      letterSpacing: '0.0125em',
+      color: '#202124',
+    },
+    subtitle1: {
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      letterSpacing: '0.00714em',
+      color: '#5f6368',
+    },
+    body1: {
+      fontSize: '0.875rem',
+      fontWeight: 400,
+      letterSpacing: '0.01071em',
+      color: '#202124',
+    },
+    body2: {
+      fontSize: '0.8125rem',
+      fontWeight: 400,
+      letterSpacing: '0.01071em',
+      color: '#5f6368',
+    },
+    button: {
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      letterSpacing: '0.0892857143em',
+      textTransform: 'none',
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  shadows: [
+    'none',
+    '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+    '0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15)',
+    '0 4px 8px 3px rgba(60,64,67,.15), 0 1px 3px 0 rgba(60,64,67,.3)',
+    '0 6px 10px 4px rgba(60,64,67,.15), 0 2px 3px 0 rgba(60,64,67,.3)',
+    '0 8px 12px 6px rgba(60,64,67,.15), 0 4px 4px 0 rgba(60,64,67,.3)',
+    ...Array(19).fill('0 8px 12px 6px rgba(60,64,67,.15), 0 4px 4px 0 rgba(60,64,67,.3)'),
+  ],
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 4,
+          textTransform: 'none',
+          fontWeight: 500,
+          padding: '6px 16px',
+        },
+        contained: {
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+          },
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          border: '1px solid #e8eaed',
+          boxShadow: 'none',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+        elevation1: {
+          boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          boxShadow: 'none',
+          borderBottom: '1px solid #e8eaed',
+        },
+      },
+    },
+  },
 });
 
 function App() {
@@ -133,7 +264,7 @@ function App() {
                 easing: theme.transitions.easing.sharp,
                 duration: theme.transitions.duration.leavingScreen,
               }),
-              marginLeft: sidebarOpen ? 0 : '-240px',
+              marginLeft: sidebarOpen ? 0 : '-260px',
             }}
           >
             <Routes>

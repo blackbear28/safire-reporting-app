@@ -1025,6 +1025,16 @@ const AuthUserProvider = ({ children }) => {
 
           console.log('Final user data set:', userData);
           setUser(userData);
+          
+          // Check for any pending usage log sessions that weren't uploaded
+          try {
+            const hasSession = await usageLogger.loadSession();
+            if (hasSession) {
+              console.log('Found pending usage log session, will auto-upload on background');
+            }
+          } catch (error) {
+            console.error('Error checking for pending usage log:', error);
+          }
         } catch (error) {
           console.error('Error fetching user data:', error);
           // Fall back to basic auth data
