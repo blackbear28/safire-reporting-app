@@ -13,6 +13,18 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin', 'super_admin'];
     }
     
+    // Helper function to check if user is department head
+    function isDepartmentHead() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'department_head';
+    }
+    
+    // Helper function to check if user is president
+    function isPresident() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'president';
+    }
+    
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -89,6 +101,34 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAuthenticated();
       allow delete: if isAdmin();
+    }
+    
+    // Appeals collection (ISO 21001:2018 Complaint Appeals)
+    match /appeals/{appealId} {
+      // Users can read their own appeals, admins/dept heads/presidents can read all
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      isAdmin() || 
+                      isDepartmentHead() || 
+                      isPresident());
+      
+      // Users can only create appeals for their own rejected reports
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Admins can update appeals in stages 1-3 (submission, review, documentation, forwarding)
+      // Department heads can update appeals in stage 4-5 (department review, proposal)
+      // Presidents can update appeals in stage 6-7 (decision, approval/disapproval)
+      // Admins can complete appeals in stage 8-10
+      allow update: if isAuthenticated() && (
+                       (isAdmin() && resource.data.currentStage <= 7) ||
+                       (isDepartmentHead() && resource.data.currentStage in [4, 5]) ||
+                       (isPresident() && resource.data.currentStage in [6, 7])
+                     );
+      
+      // Only admins can delete appeals (for cleanup/moderation)
+      // Completed appeals should not be deleted for audit trail
+      allow delete: if isAdmin() && resource.data.status != 'completed';
     }
     
     // Conversations collection (NEW - for user-admin messaging)

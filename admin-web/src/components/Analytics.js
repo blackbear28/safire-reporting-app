@@ -23,7 +23,7 @@ import {
   Line,
   ResponsiveContainer
 } from 'recharts';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];

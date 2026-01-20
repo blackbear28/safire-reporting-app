@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
   Paper,
   List,
-  ListItem,
   ListItemButton,
   ListItemText,
   ListItemAvatar,
@@ -43,6 +42,34 @@ export default function MessagesManagement() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Mark messages as read by admin
+  const markMessagesAsRead = useCallback(async () => {
+    if (!selectedConversation) return;
+    
+    try {
+      const messagesRef = collection(db, 'conversations', selectedConversation.id, 'messages');
+      const q = query(
+        messagesRef,
+        where('senderRole', '!=', 'admin'),
+        where('read', '==', false)
+      );
+      
+      const snapshot = await getDocs(q);
+      const updatePromises = snapshot.docs.map(docSnapshot => {
+        const messageRef = doc(db, 'conversations', selectedConversation.id, 'messages', docSnapshot.id);
+        return updateDoc(messageRef, { read: true });
+      });
+      
+      await Promise.all(updatePromises);
+      
+      // Update conversation unread count
+      const conversationRef = doc(db, 'conversations', selectedConversation.id);
+      await updateDoc(conversationRef, { unreadByAdmin: 0 });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  }, [selectedConversation]);
 
   // Subscribe to all conversations
   useEffect(() => {
@@ -104,35 +131,7 @@ export default function MessagesManagement() {
     });
 
     return () => unsubscribe();
-  }, [selectedConversation]);
-
-  // Mark messages as read by admin
-  const markMessagesAsRead = async () => {
-    if (!selectedConversation) return;
-    
-    try {
-      const messagesRef = collection(db, 'conversations', selectedConversation.id, 'messages');
-      const q = query(
-        messagesRef,
-        where('senderRole', '!=', 'admin'),
-        where('read', '==', false)
-      );
-      
-      const snapshot = await getDocs(q);
-      const updatePromises = snapshot.docs.map(docSnapshot => {
-        const messageRef = doc(db, 'conversations', selectedConversation.id, 'messages', docSnapshot.id);
-        return updateDoc(messageRef, { read: true });
-      });
-      
-      await Promise.all(updatePromises);
-      
-      // Update conversation unread count
-      const conversationRef = doc(db, 'conversations', selectedConversation.id);
-      await updateDoc(conversationRef, { unreadByAdmin: 0 });
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-    }
-  };
+  }, [selectedConversation, markMessagesAsRead]);
 
   // Send message
   const handleSendMessage = async () => {

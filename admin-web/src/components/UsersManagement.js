@@ -36,12 +36,10 @@ import {
   Block,
   CheckCircle,
   Email,
-  Phone,
   CalendarToday,
   AdminPanelSettings,
   Warning,
-  PlayArrow,
-  Visibility
+  PlayArrow
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -63,7 +61,8 @@ const STORAGE_BUCKET = 'report-images';
 
 export default function UsersManagement({ userRole }) {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
+  const [_loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -116,7 +115,8 @@ export default function UsersManagement({ userRole }) {
     }
   };
 
-  const handleToggleUserStatus = async (userId, currentStatus) => {
+  // eslint-disable-next-line no-unused-vars
+  const _handleToggleUserStatus = async (userId, currentStatus) => {
     const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
     try {
       await updateDoc(doc(db, 'users', userId), {
@@ -181,7 +181,8 @@ export default function UsersManagement({ userRole }) {
     setSnackbar({ open: true, message, severity });
   };
 
-  const getUserStatusColor = (status) => {
+  // eslint-disable-next-line no-unused-vars
+  const _getUserStatusColor = (status) => {
     switch (status) {
       case 'active': return 'success';
       case 'suspended': return 'error';

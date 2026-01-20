@@ -32,7 +32,8 @@ import {
   Warning,
   Block,
   Flag,
-  Visibility
+  Visibility,
+  Print
 } from '@mui/icons-material';
 import { 
   collection, 
@@ -50,6 +51,8 @@ import {
   analyzePotentialFalseReport, 
   shouldAutoFlag
 } from '../utils/falseReportDetection';
+import PrintReport from './PrintReport';
+import ModerationService from '../services/moderationService';
 
 export default function ReportsManagement({ userRole }) {
   const [reports, setReports] = useState([]);
@@ -65,6 +68,8 @@ export default function ReportsManagement({ userRole }) {
   const [aiAnalysisDialogOpen, setAiAnalysisDialogOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [reportToAnalyze, setReportToAnalyze] = useState(null);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [reportToPrint, setReportToPrint] = useState(null);
 
   useEffect(() => {
     let q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
@@ -215,33 +220,119 @@ export default function ReportsManagement({ userRole }) {
   const handleAIAnalysis = async (report) => {
     try {
       setReportToAnalyze(report);
-      
-      // Fetch user's report history for analysis
-      const userReportsQuery = query(
-        collection(db, 'reports'), 
-        where('userId', '==', report.userId || ''),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const userReportsSnapshot = await getDocs(userReportsQuery);
-      const userHistory = userReportsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      showSnackbar('Analyzing report with AI...', 'info');
 
-      // Run AI analysis
-      const analysis = analyzePotentialFalseReport(report, userHistory);
-      setAnalysisResult(analysis);
+      // Call server-side moderation endpoint (preferred)
+      const MODERATION_ENDPOINT =
+        process.env.REACT_APP_MODERATION_ENDPOINT ||
+        'https://us-central1-your-project.cloudfunctions.net/moderationAnalyze';
+
+      let analysisData = null;
+      try {
+        const resp = await fetch(MODERATION_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: report.title,
+            description: report.description,
+            media: report.media || [],
+            userId: report.userId || null,
+            postId: report.id,
+            type: 'report'
+          })
+        });
+
+        if (resp.ok) {
+          analysisData = await resp.json();
+        } else {
+          const errBody = await resp.text().catch(() => '');
+          console.warn('Moderation endpoint error:', resp.status, errBody);
+        }
+      } catch (endpointErr) {
+        console.warn('Moderation endpoint failed, falling back to local service:', endpointErr.message);
+      }
+
+      // Fallback to local ModerationService if endpoint fails
+      if (!analysisData) {
+        try {
+          const userReportsQuery = query(
+            collection(db, 'reports'), 
+            where('userId', '==', report.userId || ''),
+            orderBy('createdAt', 'desc')
+          );
+          
+          const userReportsSnapshot = await getDocs(userReportsQuery);
+          const userHistory = userReportsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          const aiResult = await ModerationService.analyzeReport({
+            title: report.title,
+            description: report.description,
+            category: report.category,
+            priority: report.priority,
+            anonymous: report.anonymous,
+            userReportCount: userHistory.length
+          });
+
+          if (aiResult.success) {
+            analysisData = {
+              allowed: aiResult.analysis.isLegitimate,
+              violationType: aiResult.analysis.severity,
+              confidence: aiResult.analysis.legitimacyConfidence,
+              message: aiResult.analysis.reasoning,
+              details: {
+                suspicionScore: (100 - aiResult.analysis.legitimacyConfidence),
+                riskLevel: aiResult.analysis.riskLevel,
+                credibilityScore: aiResult.analysis.credibilityScore,
+                suspiciousFactors: aiResult.analysis.suspiciousFactors,
+                recommendations: aiResult.analysis.recommendations
+              }
+            };
+          } else {
+            throw new Error(aiResult.error || 'Local analysis failed');
+          }
+        } catch (fallbackErr) {
+          console.error('Both endpoint and local service failed:', fallbackErr);
+          showSnackbar('Failed to run AI analysis: ' + (fallbackErr?.message || 'Unknown error'), 'error');
+          return;
+        }
+      }
+
+      // Display results
+      const isSuspicious = !analysisData.allowed;
+      // Normalize riskLevel to uppercase for UI comparisons, compute true suspicion score
+      const rawConfidence = typeof analysisData.confidence === 'number' ? analysisData.confidence : (analysisData.confidence ? Number(analysisData.confidence) : 0);
+      const computedSuspicion = Math.round(100 - rawConfidence);
+      const rawRisk = (analysisData.details?.riskLevel || (isSuspicious ? 'high' : 'low')).toString();
+      const normalizedRisk = rawRisk.toUpperCase();
+
+      setAnalysisResult({
+        suspicionScore: computedSuspicion,
+        riskLevel: normalizedRisk,
+        isSuspicious,
+        legitimacyConfidence: rawConfidence,
+        confidencePercentage: rawConfidence,
+        credibilityScore: analysisData.details?.credibilityScore || rawConfidence,
+        severity: analysisData.violationType,
+        suspiciousFactors: analysisData.details?.suspiciousFactors || [],
+        recommendations: analysisData.details?.recommendations || [],
+        reasoning: analysisData.message,
+        analyzedAt: new Date()
+      });
+      
       setAiAnalysisDialogOpen(true);
 
-      // If analysis suggests auto-flagging, show recommendation
-      if (shouldAutoFlag(analysis)) {
-        showSnackbar('AI analysis suggests this report may be false - review recommended', 'warning');
+      if (isSuspicious) {
+        showSnackbar('⚠️ AI flagged this report as potentially suspicious - review recommended', 'warning');
+      } else {
+        showSnackbar('✅ AI analysis completed - report appears legitimate', 'success');
       }
 
     } catch (error) {
       console.error('Error running AI analysis:', error);
-      showSnackbar('Failed to run AI analysis', 'error');
+      showSnackbar('Failed to run AI analysis: ' + (error?.message || 'Unknown error'), 'error');
     }
   };
 
@@ -503,6 +594,17 @@ export default function ReportsManagement({ userRole }) {
                 >
                   AI Check
                 </Button>
+                <Button 
+                  size="small" 
+                  color="primary"
+                  onClick={() => {
+                    setReportToPrint(report);
+                    setPrintDialogOpen(true);
+                  }}
+                  startIcon={<Print />}
+                >
+                  Print
+                </Button>
                 {!report.isFalsePositive && report.status !== 'resolved' && (
                   <Button 
                     size="small" 
@@ -749,13 +851,28 @@ export default function ReportsManagement({ userRole }) {
               </Box>
 
               <Alert 
-                severity={analysisResult.riskLevel === 'HIGH' ? 'error' : analysisResult.riskLevel === 'MEDIUM' ? 'warning' : 'info'} 
+                severity={analysisResult.riskLevel === 'high' || analysisResult.riskLevel === 'critical' ? 'error' : analysisResult.riskLevel === 'medium' ? 'warning' : 'info'} 
                 sx={{ mb: 2 }}
               >
-                <strong>Recommendation:</strong> {analysisResult.recommendation.message}
+                <strong>Analysis:</strong> {analysisResult.reasoning || 'Report analyzed'}
               </Alert>
 
-              {analysisResult.suspiciousFactors.length > 0 && (
+              {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Recommendations:
+                  </Typography>
+                  <ul>
+                    {analysisResult.recommendations.map((rec, index) => (
+                      <li key={index}>
+                        <Typography variant="body2">{rec}</Typography>
+                      </li>
+                    ))}
+                  </ul>
+                </Box>
+              )}
+
+              {analysisResult.suspiciousFactors && analysisResult.suspiciousFactors.length > 0 && (
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>
                     Suspicious Factors Detected:
@@ -804,18 +921,28 @@ export default function ReportsManagement({ userRole }) {
 
       {/* Snackbar for notifications */}
       <Snackbar
-        open={snackbar.open}
+        open={snackbar?.open || false}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
         <Alert
           onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
+          severity={snackbar?.severity || 'info'}
           sx={{ width: '100%' }}
         >
-          {snackbar.message}
+          {snackbar?.message || ''}
         </Alert>
       </Snackbar>
+
+      {/* Print Report Dialog */}
+      <PrintReport 
+        report={reportToPrint}
+        open={printDialogOpen}
+        onClose={() => {
+          setPrintDialogOpen(false);
+          setReportToPrint(null);
+        }}
+      />
     </Box>
   );
 }

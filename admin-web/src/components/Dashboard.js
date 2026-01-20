@@ -7,7 +7,9 @@ import {
   Card,
   CardContent,
   Chip,
-  LinearProgress,
+  Button,
+  IconButton,
+  Avatar,
 } from '@mui/material';
 import {
   Report as ReportIcon,
@@ -16,11 +18,17 @@ import {
   Pending as PendingIcon,
   TrendingUp as TrendingIcon,
   Warning as WarningIcon,
+  ArrowForward as ArrowForwardIcon,
+  Code as CodeIcon,
+  Chat as ChatIcon,
+  BarChart as BarChartIcon,
 } from '@mui/icons-material';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard({ userRole }) {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalReports: 0,
     pendingReports: 0,

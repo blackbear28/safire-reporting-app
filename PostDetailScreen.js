@@ -415,6 +415,42 @@ export default function PostDetailScreen({ navigation, route }) {
                   : 0)} views
               </Text>
             </View>
+
+            {/* Appeal Button - ISO 21001:2018 Compliant */}
+            {postData?.status === 'rejected' && !postData?.appealStatus && postData?.userId === userData?.uid && (
+              <TouchableOpacity
+                style={styles.appealButton}
+                onPress={() => navigation.navigate('Appeal', {
+                  reportId: postId,
+                  reportTitle: postData?.title || 'Report'
+                })}
+              >
+                <Ionicons name="document-text-outline" size={20} color="#fff" />
+                <Text style={styles.appealButtonText}>
+                  📋 Submit Appeal (ISO 21001:2018)
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Show appeal status if already appealed */}
+            {postData?.appealStatus && (
+              <View style={[styles.appealStatusBanner, {
+                backgroundColor: postData.appealStatus === 'approved' ? '#4CAF50' :
+                               postData.appealStatus === 'disapproved' ? '#F44336' :
+                               '#FF9800'
+              }]}>
+                <Ionicons name="document-text" size={20} color="#fff" />
+                <Text style={styles.appealStatusText}>
+                  Appeal Status: {postData.appealStatus.replace('_', ' ').toUpperCase()}
+                </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Appeal', {
+                  reportId: postId,
+                  reportTitle: postData?.title || 'Report'
+                })}>
+                  <Text style={styles.appealViewLink}>View Details →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Comments Section */}
@@ -772,5 +808,45 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+  },
+  appealButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9800',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    gap: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  appealButtonText: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 15,
+    color: '#fff',
+  },
+  appealStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  appealStatusText: {
+    flex: 1,
+    fontFamily: 'Outfit-Bold',
+    fontSize: 14,
+    color: '#fff',
+  },
+  appealViewLink: {
+    fontFamily: 'Outfit-Bold',
+    fontSize: 14,
+    color: '#fff',
+    textDecorationLine: 'underline',
   },
 });

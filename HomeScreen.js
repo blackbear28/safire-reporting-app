@@ -812,8 +812,8 @@ const ComplaintTab = ({ styles, navigation }) => {
   return (
   <View style={[styles.centerTab, { backgroundColor: colors.background }]}>
     <Ionicons name="warning-outline" size={64} color="#ff6b6b" />
-    <Text style={[styles.tabTitle, { color: colors.text }]}>File a Complaint</Text>
-    <Text style={[styles.tabSubtitle, { color: colors.textSecondary }]}>Report an issue or concern</Text>
+    <Text style={[styles.tabTitle, { color: colors.text }]}>File Official Complaint</Text>
+    <Text style={[styles.tabSubtitle, { color: colors.textSecondary }]}>Submit formal complaint for administrative review</Text>
     <TouchableOpacity 
       style={styles.actionButton}
       onPress={() => navigation.navigate('Report', { isComplaint: true })}
@@ -1363,9 +1363,10 @@ export default function HomeScreen({ navigation, route }) {
       setFeedInitialized(true);
     }, 5000);
     
-    const unsubscribe = ReportService.subscribeToFeed((reports) => {
-      console.log('Feed updated - received reports:', reports.length);
-      clearTimeout(loadingTimeout);
+    const unsubscribe = ReportService.subscribeToFeed(
+      (reports) => {
+        console.log('Feed updated - received reports:', reports.length);
+        clearTimeout(loadingTimeout);
       
       // Only update if the data actually changed to prevent unnecessary re-renders
       setFeed(prevFeed => {
@@ -1389,7 +1390,10 @@ export default function HomeScreen({ navigation, route }) {
       
       setFeedLoading(false);
       setFeedInitialized(true);
-    }, 20);
+    },
+    20, // limit
+    userData?.uid // current user ID for filtering
+    );
 
     return () => {
       console.log('Cleaning up feed subscription');

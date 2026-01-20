@@ -19,6 +19,8 @@ import {
 import { db } from '../firebase';
 import { supabase, STORAGE_BUCKET } from '../supabase';
 import * as FileSystem from 'expo-file-system/legacy';
+import ModerationService from './moderationService';
+import PostModerationService from './postModerationService';
 
 export class ReportService {
   
@@ -137,12 +139,164 @@ export class ReportService {
   // Submit a new report
   static async submitReport(reportData) {
     try {
-      // Upload images if any using Supabase Storage
+      // ===== STEP 1: AI POST MODERATION FOR PUBLIC FEED =====
+      // Check if this is a public post (not anonymous, not a complaint)
+      const isPublicPost = !reportData.isAnonymous && !reportData.isComplaint;
+      
+      if (isPublicPost) {
+        console.log('🛡️ Running AI post moderation for public feed...');
+        
+        // Quick pre-check (instant feedback)
+        const preCheck = PostModerationService.quickPreCheck(reportData.description || '');
+        if (!preCheck.passed) {
+          return {
+            success: false,
+            error: preCheck.message,
+            moderationBlocked: true
+          };
+        }
+        
+        // Full AI moderation — allow forcing local moderation for testing
+        const FORCE_LOCAL = (
+          (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FORCE_LOCAL_MODERATION === 'true') ||
+          (typeof global !== 'undefined' && global.__FORCE_LOCAL_MODERATION__ === true)
+        );
+        let postModeration = null;
+
+        if (FORCE_LOCAL) {
+          console.log('⚠️ FORCE_LOCAL enabled — using local PostModerationService for testing');
+          try {
+            postModeration = await PostModerationService.moderatePost({
+              title: reportData.title,
+              description: reportData.description,
+              media: []
+            });
+          } catch (localErr) {
+            console.error('Local PostModerationService failed:', localErr);
+            postModeration = { allowed: true, violationType: null, reason: null };
+          }
+        } else {
+          // Call serverless endpoint first (preferred)
+          const MODERATION_ENDPOINT =
+            process.env.REACT_APP_MODERATION_ENDPOINT ||
+            (typeof global !== 'undefined' && global.__MODERATION_ENDPOINT__) ||
+            'https://us-central1-your-project.cloudfunctions.net/moderationAnalyze';
+
+          try {
+            const resp = await fetch(MODERATION_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: reportData.title,
+                description: reportData.description,
+                media: [],
+                userId: reportData.userId || null,
+                type: 'post'
+              })
+            });
+
+            if (resp.ok) {
+              const ai = await resp.json();
+              postModeration = {
+                allowed: !!ai.allowed,
+                violationType: ai.violationType || null,
+                reason: ai.message || (ai.allowed ? null : 'Blocked by AI'),
+                raw: ai
+              };
+            } else {
+              // Non-OK response — log and fall back to local moderation service
+              const errBody = await resp.text().catch(() => '');
+              console.warn('Moderation endpoint responded with error:', resp.status, errBody);
+            }
+          } catch (endpointErr) {
+            console.warn('Moderation endpoint call failed, falling back to local AI:', endpointErr.message || endpointErr);
+          }
+
+          // If endpoint failed to provide a result, use local PostModerationService as fallback
+          if (!postModeration) {
+            try {
+              postModeration = await PostModerationService.moderatePost({
+                title: reportData.title,
+                description: reportData.description,
+                media: []
+              });
+            } catch (localErr) {
+              console.error('Local PostModerationService failed:', localErr);
+              // If both remote and local fail, allow by default but log
+              postModeration = { allowed: true, violationType: null, reason: null };
+            }
+          }
+        }
+
+        if (!postModeration.allowed) {
+          console.warn('⛔ Post blocked by AI moderation:', postModeration.violationType);
+
+          // Log the moderation action (prefer server-provided raw data if present)
+          try {
+            const moderationLog = (postModeration.raw && postModeration.raw.log)
+              ? postModeration.raw.log
+              : PostModerationService.createModerationLog(reportData.userId, reportData, postModeration);
+            await addDoc(collection(db, 'moderationLogs'), moderationLog);
+          } catch (logError) {
+            console.error('Failed to log moderation action:', logError);
+          }
+
+          // Return user-friendly error message
+          return {
+            success: false,
+            error: postModeration.reason || 'Your post was blocked by automated moderation.',
+            moderationBlocked: true,
+            violationType: postModeration.violationType
+          };
+        }
+      }
+
+      // ===== STEP 2: CONTENT MODERATION FOR REPORTS/COMPLAINTS =====
+      // For anonymous reports and complaints, use standard moderation
+      if (!isPublicPost) {
+        console.log('🛡️ Running standard content moderation...');
+        const moderationResult = await ModerationService.moderateReport({
+          title: reportData.title,
+          description: reportData.description,
+          images: [] // We'll check images after upload to avoid re-fetching
+        });
+
+        // If content is blocked, reject immediately
+        if (!moderationResult.allowed) {
+          console.warn('⛔ Report blocked by moderation:', moderationResult.blockedReasons);
+          return {
+            success: false,
+            error: `Your report was blocked: ${moderationResult.blockedReasons.join(', ')}. ` +
+                   'Please remove inappropriate content and try again.',
+            moderationBlocked: true
+          };
+        }
+      }
+
+      // ===== STEP 3: UPLOAD IMAGES =====
       let imageUrls = [];
       if (reportData.media && reportData.media.length > 0) {
         const uploadResult = await this.uploadImages(reportData.media);
         if (uploadResult.success) {
           imageUrls = uploadResult.urls;
+          
+          // ===== STEP 4: MODERATE UPLOADED IMAGES =====
+          console.log('🛡️ Moderating uploaded images...');
+          const imageModeration = await ModerationService.moderateImages(imageUrls);
+          
+          if (!imageModeration.allowed) {
+            console.warn('⛔ Images blocked by moderation:', imageModeration.flaggedImages);
+            // Delete uploaded images since they're inappropriate
+            // (Supabase cleanup could be added here if needed)
+            return {
+              success: false,
+              error: `🖼️ ${imageModeration.flaggedCount} image(s) contain inappropriate content.\n\n` +
+                     'Images with violence, explicit content, or harmful imagery cannot be posted.\n\n' +
+                     'Please remove or replace the flagged images and try again.',
+              moderationBlocked: true,
+              violationType: 'inappropriate_image'
+            };
+          }
         } else {
           console.warn('Failed to upload images:', uploadResult.error);
           // Continue with report submission even if images fail
@@ -162,7 +316,10 @@ export class ReportService {
         resolved: false,
         viewCount: 0,
         upvotes: 0,
-        downvotes: 0
+        downvotes: 0,
+        moderationFlags: [],
+        aiModerated: isPublicPost, // Flag posts that went through AI moderation
+        moderatedAt: new Date().toISOString()
       };
 
       console.log('Submitting report:', report);
@@ -397,13 +554,15 @@ export class ReportService {
   }
 
   // Get recent reports for feed
-  static subscribeToFeed(callback, limitCount = 20) {
+  static subscribeToFeed(callback, limitCount = 20, currentUserId = null) {
     try {
       console.log('Setting up feed subscription for', limitCount, 'reports');
+      
+      // Query all reports, we'll filter anonymous ones in the callback
       const q = query(
         collection(db, 'reports'),
         orderBy('createdAt', 'desc'),
-        limit(limitCount)
+        limit(limitCount * 2) // Fetch more to account for filtered anonymous reports
       );
 
       return onSnapshot(q, 
@@ -412,31 +571,43 @@ export class ReportService {
           const reports = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
-            console.log('Processing feed report:', doc.id, data.title);
-            reports.push({
-              id: doc.id,
-              title: data.title || '',
-              description: data.description || '',
-              category: data.category || 'other',
-              priority: data.priority || 'medium',
-              status: data.status || 'pending',
-              location: data.location || null,
-              media: data.media || [],
-              anonymous: Boolean(data.anonymous),
-              authorName: data.authorName || 'User',
-              authorUsername: data.authorUsername || 'user',
-              authorEmail: data.authorEmail || '',
-              authorId: data.authorId || '',
-              authorRole: data.authorRole || null,
-              authorProfilePic: data.authorProfilePic || null,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date()),
-              upvotes: Number(data.upvotes) || 0,
-              viewCount: Number(data.viewCount) || 0,
-              commentCount: Number(data.commentCount) || 0
-            });
+            
+            // Filter logic: 
+            // - Show all non-anonymous reports
+            // - Show anonymous reports only if they belong to current user
+            const isAnonymous = Boolean(data.anonymous);
+            const isOwnReport = currentUserId && data.authorId === currentUserId;
+            
+            if (!isAnonymous || isOwnReport) {
+              console.log('Processing feed report:', doc.id, data.title);
+              reports.push({
+                id: doc.id,
+                title: data.title || '',
+                description: data.description || '',
+                category: data.category || 'other',
+                priority: data.priority || 'medium',
+                status: data.status || 'pending',
+                location: data.location || null,
+                media: data.media || [],
+                anonymous: Boolean(data.anonymous),
+                authorName: data.authorName || 'User',
+                authorUsername: data.authorUsername || 'user',
+                authorEmail: data.authorEmail || '',
+                authorId: data.authorId || '',
+                authorRole: data.authorRole || null,
+                authorProfilePic: data.authorProfilePic || null,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date()),
+                upvotes: Number(data.upvotes) || 0,
+                viewCount: Number(data.viewCount) || 0,
+                commentCount: Number(data.commentCount) || 0
+              });
+            }
           });
-          console.log('Feed reports processed:', reports.length);
-          callback(reports);
+          
+          // Limit to requested count after filtering
+          const limitedReports = reports.slice(0, limitCount);
+          console.log('Feed reports processed:', limitedReports.length, '(filtered from', snapshot.size, ')');
+          callback(limitedReports);
         },
         (error) => {
           console.error('Error in feed subscription:', error);

@@ -104,6 +104,8 @@ import TestFeedbackScreen from './TestFeedbackScreen';
 import { FontAwesome } from '@expo/vector-icons';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { usageLogger, FEATURES } from './services/usageLogger';
+import ModerationService from './services/moderationService';
+import ModerationSettingsScreen from './ModerationSettingsScreen';
 
 function LoadingModal({ visible, message, showOk, onOk }) {
   return (
@@ -1143,6 +1145,33 @@ export default function App() {
   const [showSplash, setShowSplash] = React.useState(true);
   const [appError, setAppError] = React.useState(null);
   
+  // Initialize moderation service on app start
+  React.useEffect(() => {
+    const initializeModeration = async () => {
+      try {
+        // Initialize from persistent storage first
+        await ModerationService.initialize();
+
+        // If environment variables are present (development), save them to AsyncStorage
+        try {
+          const perspectiveKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_PERSPECTIVE_API_KEY) || null;
+          const hfToken = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_HUGGINGFACE_TOKEN) || null;
+          if (perspectiveKey || hfToken) {
+            await ModerationService.saveApiKeys(perspectiveKey, hfToken);
+            console.log('Loaded API keys from environment into moderation service');
+          }
+        } catch (e) {
+          // Ignore env read errors
+        }
+      } catch (error) {
+        console.warn('Moderation service initialization failed:', error);
+        // Don't block app startup if moderation fails to initialize
+      }
+    };
+    
+    initializeModeration();
+  }, []);
+  
   React.useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -1205,6 +1234,7 @@ export default function App() {
                 <Stack.Screen name="AdminMessaging" component={AdminMessagingScreen} />
                 <Stack.Screen name="PostDetail" component={PostDetailScreen} />
                 <Stack.Screen name="EditProfile" component={EditProfile} />
+                <Stack.Screen name="ModerationSettings" component={ModerationSettingsScreen} />
                 <Stack.Screen name="TestFeedback" component={TestFeedbackScreen} />
               </Stack.Navigator>
               </AuthUserProvider>

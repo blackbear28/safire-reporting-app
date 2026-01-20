@@ -9,7 +9,7 @@ import { auth, db } from './firebase';
 
 // Components
 import LoginPage from './components/LoginPage';
-import Dashboard from './components/Dashboard';
+import Dashboard from './components/Dashboard_new';
 import Sidebar from './components/Sidebar';
 import ReportsManagement from './components/ReportsManagement';
 import UsersManagement from './components/UsersManagement';
@@ -20,6 +20,8 @@ import CreateAdminUser from './components/CreateAdminUser';
 import TestFeedbackLogs from './components/TestFeedbackLogs';
 import UsageLogs from './components/UsageLogs';
 import MessagesManagement from './components/MessagesManagement';
+import ModerationSettings from './components/ModerationSettings';
+import ModerationLogs from './components/ModerationLogs';
 
 // Theme configuration - Google Cloud Console inspired
 const theme = createTheme({
@@ -274,6 +276,8 @@ function App() {
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
               <Route path="/messages" element={<MessagesManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
+              <Route path="/moderation" element={<ModerationSettings userRole={userRole} />} />
+              <Route path="/moderation-logs" element={<ModerationLogs userRole={userRole} />} />
               <Route path="/test-feedback" element={<TestFeedbackLogs userRole={userRole} />} />
               <Route path="/usage-logs" element={<UsageLogs />} />
               <Route path="/settings" element={<Settings userRole={userRole} />} />

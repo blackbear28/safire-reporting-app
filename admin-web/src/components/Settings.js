@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -8,29 +8,24 @@ import {
   CardContent,
   CardHeader,
   Switch,
-  FormControlLabel,
   TextField,
   Button,
-  Divider,
   Alert,
   Snackbar,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  ListItemSecondaryAction,
-  IconButton
+  ListItemSecondaryAction
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
   Notifications,
   Security,  
   Email,
-  Save,
-  Delete,
-  Add
+  Save
 } from '@mui/icons-material';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function Settings({ userRole }) {
@@ -57,22 +52,22 @@ export default function Settings({ userRole }) {
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const settingsDoc = await getDoc(doc(db, 'admin_settings', 'general'));
       if (settingsDoc.exists()) {
-        setSettings({ ...settings, ...settingsDoc.data() });
+        setSettings(prev => ({ ...prev, ...settingsDoc.data() }));
       }
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const saveSettings = async () => {
     try {

@@ -33,7 +33,14 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+admin-web/.env
+admin-web/.env*.local
+
+# API keys (never commit these!)
+**/GEMINI_API_KEY*
+**/HUGGINGFACE_TOKEN*
 
 # typescript
 *.tsbuildinfo

@@ -6,11 +6,10 @@ import {
   ListItemIcon,
   ListItemText,
   ListItemButton,
-  Divider,
   Typography,
   Box,
   IconButton,
-  Avatar,
+  
   Chip,
 } from '@mui/material';
 import {
@@ -25,6 +24,7 @@ import {
   Feedback as FeedbackIcon,
   Chat as ChatIcon,
   History as HistoryIcon,
+  Shield as ShieldIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -38,6 +38,8 @@ const menuItems = [
   { text: 'Users', icon: <PeopleIcon />, path: '/users' },
   { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
+  { text: 'Moderation', icon: <ShieldIcon />, path: '/moderation', badge: 'AI' },
+  { text: 'Moderation Logs', icon: <HistoryIcon />, path: '/moderation-logs', badge: 'NEW' },
   { text: 'Test Feedback', icon: <FeedbackIcon />, path: '/test-feedback' },
   { text: 'Usage Logs', icon: <HistoryIcon />, path: '/usage-logs' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
@@ -115,7 +117,7 @@ export default function Sidebar({ open, onToggle, userRole }) {
             <Typography 
               variant="h6" 
               sx={{ 
-                fontSize: '1.125rem',
+                fontSize: '1rem',
                 fontWeight: 600,
                 color: '#202124',
                 lineHeight: 1.2,
@@ -143,7 +145,7 @@ export default function Sidebar({ open, onToggle, userRole }) {
       </Box>
 
       {/* Navigation Menu */}
-      <List sx={{ px: 1, py: 1.5 }}>
+      <List sx={{ px: 1.5, py: 1.5 }}>
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
@@ -184,6 +186,19 @@ export default function Sidebar({ open, onToggle, userRole }) {
                   color: location.pathname === item.path ? '#1a73e8' : '#202124',
                 }}
               />
+              {item.badge && (
+                <Chip 
+                  label={item.badge} 
+                  size="small"
+                  sx={{ 
+                    height: 20,
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    backgroundColor: '#ff8c00',
+                    color: '#fff'
+                  }}
+                />
+              )}
             </ListItemButton>
           </ListItem>
         ))}
