@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import './UsageLogs.css';
 
 const UsageLogs = () => {
@@ -98,6 +98,26 @@ const UsageLogs = () => {
   const viewFullLog = (log) => {
     setSelectedLog(log);
     setShowModal(true);
+  };
+
+  const deleteLog = async (logId, testUserCode) => {
+    if (!window.confirm(`Are you sure you want to delete the usage log for "${testUserCode}"?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'usageLogs', logId));
+      console.log('✓ Deleted usage log:', logId);
+      
+      // Remove from local state
+      setLogs(logs.filter(log => log.id !== logId));
+      
+      // Show success message
+      alert('✓ Usage log deleted successfully!');
+    } catch (error) {
+      console.error('✗ Error deleting usage log:', error);
+      alert('Failed to delete usage log: ' + error.message);
+    }
   };
 
   if (loading) {
@@ -205,6 +225,13 @@ const UsageLogs = () => {
                 </button>
                 <button onClick={() => copyToClipboard(log)} className="copy-button">
                   📋 Copy
+                </button>
+                <button 
+                  onClick={() => deleteLog(log.id, log.testUserCode)} 
+                  className="delete-button"
+                  title="Delete this log"
+                >
+                  🗑️ Delete
                 </button>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { AppState } from 'react-native';
 
 const STORAGE_KEY = 'usage_log_session';
+const PENDING_UPLOAD_KEY = 'usage_log_pending_upload';
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 // Feature mapping for tracking
@@ -53,6 +54,9 @@ class UsageLogger {
 
   // Initialize session with test user code
   async initSession(testUserCode, userId, userEmail, userRole) {
+    // Check for any pending uploads from previous sessions
+    await this.uploadPendingSession();
+
     this.testUserCode = testUserCode;
     this.sessionStartTime = new Date();
     this.sessionLogs = [];
@@ -81,20 +85,15 @@ class UsageLogger {
 
   // Set up app state listener to detect when app goes to background
   setupAppStateListener() {
-    this.appStateSubscription = AppState.addEventListener('change', async (nextAppState) => {
+    this.appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         console.log('App went to background/inactive - auto-completing session');
         this.isBackgrounded = true;
-        await this.autoCompleteSession('App closed or backgrounded');
+        this.autoCompleteSession('App closed or backgrounded');
       } else if (nextAppState === 'active') {
         console.log('App became active');
         this.isBackgrounded = false;
-        // Check if we have a pending session that wasn't uploaded
-        const hasSession = await this.loadSession();
-        if (hasSession) {
-          console.log('Resuming previous session');
-          this.lastActivityTime = new Date();
-        }
+        this.lastActivityTime = new Date();
       }
     });
   }
@@ -163,15 +162,15 @@ class UsageLogger {
         createdAt: new Date().toISOString()
       };
 
-      // Upload to Firebase
-      const docRef = await addDoc(collection(db, 'usageLogs'), sessionDocument);
-      console.log('Usage log auto-uploaded to Firebase:', docRef.id);
+      // Save to AsyncStorage for upload on next app open
+      await AsyncStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(sessionDocument));
+      console.log('✓ Session saved - will upload on next app open');
 
-      // Clear session
+      // Clear active session
       await AsyncStorage.removeItem(STORAGE_KEY);
       this.reset();
 
-      return docRef.id;
+      return true;
     } catch (error) {
       console.error('Error auto-completing usage logger session:', error);
       // Don't throw - we don't want to crash the app when backgrounding
@@ -432,6 +431,31 @@ class UsageLogger {
       currentFeature: this.currentFeature?.feature,
       logsCount: this.sessionLogs.length
     };
+  }
+
+  // Upload pending session from previous app closure
+  async uploadPendingSession() {
+    try {
+      const pendingData = await AsyncStorage.getItem(PENDING_UPLOAD_KEY);
+      if (pendingData) {
+        const sessionDocument = JSON.parse(pendingData);
+        console.log('📤 Found pending upload from previous session');
+        console.log('   User:', sessionDocument.testUserCode);
+        console.log('   Duration:', sessionDocument.totalDurationMinutes, 'min');
+        console.log('   Features used:', sessionDocument.logs.length);
+        
+        const docRef = await addDoc(collection(db, 'usageLogs'), sessionDocument);
+        console.log('✓ Pending usage log uploaded to Firebase:', docRef.id);
+        
+        // Clear pending upload
+        await AsyncStorage.removeItem(PENDING_UPLOAD_KEY);
+      } else {
+        console.log('No pending uploads found');
+      }
+    } catch (error) {
+      console.error('✗ Error uploading pending session:', error);
+      // Keep the pending upload for next time
+    }
   }
 }
 
