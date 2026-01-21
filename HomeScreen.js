@@ -36,6 +36,7 @@ import { ProgressiveImage, useLazyLoading, preloadImages } from './components/Pr
 import FastImage from './components/FastImage';
 import { TrophyDisplay } from './components/TrophySystem';
 import CampusNavigatorScreen from './CampusNavigatorScreen';
+import SupportScreen from './SupportScreen';
 
 const initialLayout = { width: Dimensions.get('window').width };
 
@@ -1242,7 +1243,7 @@ export default function HomeScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false); // Moved to top level
   const [routes] = useState([
     { key: 'home', title: 'Home' },
-    { key: 'dashboard', title: 'Dashboard' },
+    { key: 'dashboard', title: 'Support' },
     { key: 'messages', title: 'Messages' },
     { key: 'plus', title: 'Submit' },
     { key: 'complaint', title: 'Complaint' },
@@ -1545,7 +1546,6 @@ export default function HomeScreen({ navigation, route }) {
           ...prev,
           [reportId]: currentUpvoteState
         }));
-        
         setFeed(prevFeed => 
           prevFeed.map(item => 
             item.id === reportId 
@@ -1556,7 +1556,6 @@ export default function HomeScreen({ navigation, route }) {
               : item
           )
         );
-        
         Alert.alert('Error', result.error || 'Failed to upvote report');
       }
     } catch (error) {
@@ -1566,7 +1565,6 @@ export default function HomeScreen({ navigation, route }) {
         ...prev,
         [reportId]: currentUpvoteState
       }));
-      
       setFeed(prevFeed => 
         prevFeed.map(item => 
           item.id === reportId 
@@ -1577,7 +1575,6 @@ export default function HomeScreen({ navigation, route }) {
             : item
         )
       );
-      
       Alert.alert('Error', 'Failed to upvote report');
     }
   }, [userUpvotes]);
@@ -2003,7 +2000,7 @@ export default function HomeScreen({ navigation, route }) {
       navigation={navigation}
       colors={colors}
     />,
-    dashboard: () => <DashboardTab navigation={navigation} styles={styles} />,
+    dashboard: () => <SupportScreen />,
     messages: () => <MessagesTab navigation={navigation} styles={styles} userData={userData} colors={colors} />,
     plus: () => <SubmitTab navigation={navigation} styles={styles} />,
     complaint: () => <ComplaintTab navigation={navigation} styles={styles} />,
@@ -2049,7 +2046,7 @@ export default function HomeScreen({ navigation, route }) {
             style={styles.chatButton}
             onPress={() => navigation.navigate('Chat')}
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#2667ff" />
+            <Ionicons name="help-circle-outline" size={24} color="#2667ff" />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.notificationButton}
@@ -2092,10 +2089,10 @@ export default function HomeScreen({ navigation, route }) {
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(1)}>
-              <Ionicons 
-                name={index === 1 ? "pie-chart" : "pie-chart-outline"} 
-                size={24} 
-                color={index === 1 ? colors.text : colors.textSecondary} 
+              <Ionicons
+                name={index === 1 ? "heart-circle" : "heart-circle-outline"}
+                size={24}
+                color={index === 1 ? colors.text : colors.textSecondary}
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(2)}>
@@ -2241,34 +2238,29 @@ const styles = StyleSheet.create({
   // Container Styles
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    // backgroundColor: colors.background (set in JSX)
   },
   safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+        flex: 1,
+        // backgroundColor will be set dynamically using theme
+      },
   headerBar: {
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 3,
-  },
+        width: '100%',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        zIndex: 20,
+        borderBottomWidth: 1,
+        // backgroundColor, borderBottomColor, shadowColor will be set dynamically using theme
+        elevation: 3,
+      },
   headerBrand: {
-    fontFamily: 'Outfit-Bold',
-    fontSize: FontSizes.pageTitle,
-    color: '#2667ff',
-  },
+        fontFamily: 'Outfit-Bold',
+        fontSize: FontSizes.pageTitle,
+        // color will be set dynamically using theme
+      },
   headerRightSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2282,50 +2274,50 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#ff3838',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        // backgroundColor will be set dynamically using theme
+      },
   notificationBadgeText: {
-    color: '#fff',
-    fontSize: FontSizes.notificationBadge,
-    fontFamily: 'Outfit-Bold',
-    textAlign: 'center',
-  },
+        fontSize: FontSizes.notificationBadge,
+        fontFamily: 'Outfit-Bold',
+        textAlign: 'center',
+        // color will be set dynamically using theme
+      },
   tabContainer: {
     flex: 1,
   },
 
   // Center tab styles
   centerTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: '#f5f5f5',
-  },
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        // backgroundColor will be set dynamically using theme
+      },
   tabTitle: {
-    fontFamily: 'Outfit-Bold',
-    fontSize: FontSizes.sectionTitle,
-    color: '#1a1a1a',
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
+        fontFamily: 'Outfit-Bold',
+        fontSize: FontSizes.sectionTitle,
+        marginTop: 16,
+        marginBottom: 8,
+        textAlign: 'center',
+        // color will be set dynamically using theme
+      },
   tabSubtitle: {
-    fontFamily: 'Outfit-Regular',
-    fontSize: FontSizes.bodyText,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
+        fontFamily: 'Outfit-Regular',
+        fontSize: FontSizes.bodyText,
+        textAlign: 'center',
+        marginBottom: 24,
+        // color will be set dynamically using theme
+      },
   actionButton: {
     backgroundColor: '#2667ff',
     paddingHorizontal: 24,
@@ -2493,18 +2485,14 @@ const styles = StyleSheet.create({
   // Bottom navigation
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    // backgroundColor, borderTopColor, shadowColor: use theme in JSX
     paddingHorizontal: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: -1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 10,
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   navRow: {
     flexDirection: 'row',
@@ -2542,7 +2530,7 @@ const styles = StyleSheet.create({
   // Notification Modal Styles
   notificationModal: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    // backgroundColor: colors.background (set in JSX)
   },
   notificationHeader: {
     flexDirection: 'row',
@@ -2675,7 +2663,7 @@ const styles = StyleSheet.create({
   // Home Tab Styles
   homeTabContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    // backgroundColor: colors.background (set in JSX)
   },
 
   // School News Section
@@ -2924,7 +2912,7 @@ const styles = StyleSheet.create({
   // Trending Section
   trendingSection: {
     marginBottom: 20,
-    backgroundColor: '#fff',
+    // backgroundColor: colors.background (set in JSX)
   },
   trendingSectionTransparent: {
     marginBottom: 20,
@@ -2953,7 +2941,7 @@ const styles = StyleSheet.create({
   // Feed Section
   feedSection: {
     flex: 1,
-    backgroundColor: '#fff',
+    // backgroundColor: colors.background (set in JSX)
   },
   feedSectionTransparent: {
     flex: 1,

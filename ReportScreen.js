@@ -11,7 +11,8 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Modal,
-  StyleSheet
+  StyleSheet,
+  Switch
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,6 +58,9 @@ export default function ReportScreen({ navigation, route }) {
   const [room, setRoom] = useState(editMode && reportData?.location?.room ? reportData.location.room : '');
   const [loading, setLoading] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [preferredOutcome, setPreferredOutcome] = useState(editMode && reportData ? reportData.preferredOutcome || '' : '');
+  const [witnesses, setWitnesses] = useState(editMode && reportData ? (reportData.witnesses ? (Array.isArray(reportData.witnesses) ? reportData.witnesses.join('\n') : reportData.witnesses) : '') : '');
+  const [confidential, setConfidential] = useState(editMode && reportData ? !!reportData.confidential : false);
 
   // Smart categorization based on description
   const analyzeText = (text) => {
@@ -232,6 +236,10 @@ export default function ReportScreen({ navigation, route }) {
           coordinates: location
         },
         media: media,
+        isComplaint: route?.params?.isComplaint || false,
+        preferredOutcome: preferredOutcome || null,
+        witnesses: witnesses ? witnesses.split(/\r?\n/).map(s => s.trim()).filter(Boolean) : [],
+        confidential: !!confidential,
         anonymous: isAnonymous,
         sentimentScore: sentiment.score,
         emotion: sentiment.emotion,
@@ -269,7 +277,13 @@ export default function ReportScreen({ navigation, route }) {
           );
         }
         
-        Alert.alert('Success', editMode ? 'Your report has been updated successfully!' : 'Your report has been submitted successfully!', [
+        const successMessage = editMode
+          ? 'Your report has been updated successfully!'
+          : (reportPayload.isComplaint
+              ? 'Your official complaint has been submitted to administration and will not appear on the public feed.'
+              : 'Your report has been submitted successfully!');
+
+        Alert.alert('Success', successMessage, [
           { 
             text: 'OK', 
             onPress: () => {
@@ -384,6 +398,37 @@ export default function ReportScreen({ navigation, route }) {
             textAlignVertical="top"
           />
         </View>
+
+        {route?.params?.isComplaint && (
+          <View style={{ paddingHorizontal: 0 }}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Preferred Outcome (optional)</Text>
+              <TextInput
+                style={styles.reportInput}
+                value={preferredOutcome}
+                onChangeText={setPreferredOutcome}
+                placeholder="What outcome are you seeking? e.g., refund, repair, disciplinary review"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Witnesses (optional)</Text>
+              <TextInput
+                style={[styles.reportInput, { height: 80 }]}
+                value={witnesses}
+                onChangeText={setWitnesses}
+                placeholder="Names or contact info (one per line)"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 10, paddingHorizontal: 10 }}>
+              <Text style={[styles.inputLabel, { marginRight: 10 }]}>Confidential / Admin-only</Text>
+              <Switch value={confidential} onValueChange={setConfidential} />
+            </View>
+          </View>
+        )}
 
         {/* Smart Suggestions */}
         {category && (

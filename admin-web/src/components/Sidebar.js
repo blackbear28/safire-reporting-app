@@ -25,6 +25,8 @@ import {
   Chat as ChatIcon,
   History as HistoryIcon,
   Shield as ShieldIcon,
+  Flag,
+  Event as EventIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -35,7 +37,9 @@ const drawerWidth = 260;
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
+  { text: 'Complaints', icon: <Flag />, path: '/complaints' },
   { text: 'Users', icon: <PeopleIcon />, path: '/users' },
+  { text: 'Appointments', icon: <EventIcon />, path: '/appointments' },
   { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   { text: 'Moderation', icon: <ShieldIcon />, path: '/moderation', badge: 'AI' },

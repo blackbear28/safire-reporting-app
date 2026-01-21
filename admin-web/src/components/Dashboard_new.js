@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SupportRequestModal from './SupportRequestModal';
 import {
   Box,
   Typography,
@@ -234,6 +235,8 @@ export default function Dashboard({ userRole }) {
     </Box>
   );
 
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+
   return (
     <Box sx={{ p: 4, maxWidth: 1400, mx: 'auto' }}>
       {/* Header */}
@@ -439,7 +442,28 @@ export default function Dashboard({ userRole }) {
           >
             View analytics
           </Button>
+          <Button
+            variant="outlined"
+            onClick={() => setSupportModalOpen(true)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              borderColor: '#dadce0',
+              color: '#5f6368',
+              '&:hover': {
+                borderColor: '#5f6368',
+                backgroundColor: '#f8f9fa',
+              },
+            }}
+          >
+            Support Requests
+          </Button>
         </Box>
+        <SupportRequestModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} />
       </Box>
     </Box>
   );

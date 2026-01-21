@@ -310,7 +310,7 @@ export class ReportService {
         authorEmail: reportData.authorEmail || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        status: 'pending',
+        status: reportData.isComplaint ? 'submitted_to_admin' : 'pending',
         priority: reportData.priority || 'medium',
         assignedTo: null,
         resolved: false,
@@ -322,26 +322,69 @@ export class ReportService {
         moderatedAt: new Date().toISOString()
       };
 
-      console.log('Submitting report:', report);
+      console.log('Submitting report/complaint:', report);
+
+      // If this is an official complaint, save it to a separate collection and do not post to public feed
+      if (reportData.isComplaint) {
+        try {
+          // Remove admin-only fields from complaint payload
+          const {
+            status,
+            assignedTo,
+            adminOnly,
+            moderatedAt,
+            moderatedBy,
+            aiAutoFlagged,
+            aiAnalysis,
+            ...complaintPayload
+          } = report;
+          const complaintRef = await addDoc(collection(db, 'complaints'), {
+            ...complaintPayload,
+            isComplaint: true
+          });
+          console.log('Complaint submitted successfully with ID:', complaintRef.id);
+
+          // Optionally notify admins via a lightweight adminNotifications collection
+          try {
+            await addDoc(collection(db, 'adminNotifications'), {
+              type: 'complaint',
+              complaintId: complaintRef.id,
+              title: report.title || 'New Official Complaint',
+              createdAt: serverTimestamp(),
+              seen: false
+            });
+          } catch (notifyErr) {
+            console.warn('Failed to create admin notification:', notifyErr);
+          }
+
+          // Do not update user report counters or analytics for complaints
+          return { success: true, id: complaintRef.id, complaint: true };
+        } catch (complaintErr) {
+          console.error('Error submitting complaint:', complaintErr);
+          return { success: false, error: complaintErr.message };
+        }
+      }
+
+      // Default: save to public reports collection
       const docRef = await addDoc(collection(db, 'reports'), report);
       console.log('Report submitted successfully with ID:', docRef.id);
-      
+
       // Update user's report count and check for trophies
       if (reportData.authorId) {
         try {
           const userRef = doc(db, 'users', reportData.authorId);
           const userSnap = await getDoc(userRef);
-          
+
           if (userSnap.exists()) {
             const userData = userSnap.data();
             const currentCount = userData.reportsCount || 0;
             const newCount = currentCount + 1;
-            
+
             // Trophy thresholds
             const trophyMilestones = [1, 5, 10, 25, 50, 100];
             const currentTrophies = userData.trophies || [];
             const trophyIds = ['first_report', 'reporter_5', 'reporter_10', 'reporter_25', 'reporter_50', 'reporter_100'];
-            
+
             // Check if new trophy unlocked
             const newTrophies = [...currentTrophies];
             trophyMilestones.forEach((milestone, index) => {
@@ -349,14 +392,14 @@ export class ReportService {
                 newTrophies.push(trophyIds[index]);
               }
             });
-            
+
             // Update user document
             await updateDoc(userRef, {
               reportsCount: increment(1),
               trophies: newTrophies,
               lastReportDate: serverTimestamp()
             });
-            
+
             console.log('User report count updated. New count:', newCount);
             if (newTrophies.length > currentTrophies.length) {
               console.log('New trophy unlocked!');
@@ -366,14 +409,14 @@ export class ReportService {
           console.log('Failed to update user trophy data, but report was saved:', userUpdateError);
         }
       }
-      
+
       // Update analytics
       try {
         await this.updateAnalytics(reportData.category);
       } catch (analyticsError) {
         console.log('Analytics update failed, but report was saved:', analyticsError);
       }
-      
+
       return { success: true, id: docRef.id };
     } catch (error) {
       console.error('Error submitting report:', error);

@@ -155,5 +155,28 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+    
+    // Complaints collection (official / admin-only flow)
+    // - Authenticated users may create complaints (or allow anonymous creations when request.resource.data.anonymous == true)
+    // - Prevent clients from setting admin-only fields on create
+    // - Only admins can update/delete; admins or the reporting user can read (anonymous complaints readable by admins only)
+    match /complaints/{complaintId} {
+      // Prevent clients from setting admin-only fields on creation
+      allow create: if (request.auth != null || request.resource.data.anonymous == true)
+        && !(request.resource.data.keys().hasAny(['status','assignedTo','adminOnly','moderatedAt','moderatedBy','aiAutoFlagged','aiAnalysis']));
+
+      // Readable by admin or the original author (if not anonymous). Anonymous complaints are readable only by admins.
+      allow read: if isAdmin() 
+                  || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+
+      // Only admins can update or delete complaints
+      allow update, delete: if isAdmin();
+    }
+    // Appointments collection
+    match /appointments/{appointmentId} {
+      allow create: if isAuthenticated();
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
   }
 }

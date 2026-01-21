@@ -12,8 +12,10 @@ import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard_new';
 import Sidebar from './components/Sidebar';
 import ReportsManagement from './components/ReportsManagement';
+import ComplaintsManagement from './components/ComplaintsManagement';
 import UsersManagement from './components/UsersManagement';
 import Analytics from './components/Analytics';
+import AppointmentsManagement from './components/AppointmentsManagement';
 import Settings from './components/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
 import CreateAdminUser from './components/CreateAdminUser';
@@ -273,7 +275,9 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard userRole={userRole} />} />
               <Route path="/reports" element={<ReportsManagement userRole={userRole} />} />
+              <Route path="/complaints" element={<ComplaintsManagement userRole={userRole} />} />
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
+              <Route path="/appointments" element={<AppointmentsManagement />} />
               <Route path="/messages" element={<MessagesManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
               <Route path="/moderation" element={<ModerationSettings userRole={userRole} />} />
