@@ -15,31 +15,33 @@ import {
   Select,
   MenuItem,
   Grid,
-  Card,
-  CardContent,
-  CardActions,
   Alert,
   Snackbar,
-  LinearProgress
+  InputAdornment,
+  IconButton,
+  Card,
+  Divider,
+  Tooltip,
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import {
-  CheckCircle,
-  Pending,
-  Assignment,
-  LocationOn,
-  Person,
-  CalendarToday,
-  Warning,
   Block,
   Flag,
   Visibility,
-  Print
+  Print,
+  Search,
+  
+  ReportProblem,
+  Delete,
+  SaveAlt
 } from '@mui/icons-material';
+import { Assignment } from '@mui/icons-material';
 import { 
   collection, 
   query, 
   onSnapshot, 
   doc, 
+  getDoc,
   updateDoc, 
   deleteDoc,
   orderBy,
@@ -47,106 +49,69 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { 
-  analyzePotentialFalseReport, 
-  shouldAutoFlag
-} from '../utils/falseReportDetection';
 import PrintReport from './PrintReport';
 import ModerationService from '../services/moderationService';
 
 export default function ReportsManagement({ userRole }) {
   const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [search, setSearch] = useState('');
+  const [selectionModel, setSelectionModel] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [flagDialogOpen, setFlagDialogOpen] = useState(false);
   const [flagReason, setFlagReason] = useState('');
   const [reportToFlag, setReportToFlag] = useState(null);
   const [aiAnalysisDialogOpen, setAiAnalysisDialogOpen] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
   const [reportToAnalyze, setReportToAnalyze] = useState(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [reportToPrint, setReportToPrint] = useState(null);
+  const [reporterInfo, setReporterInfo] = useState(null);
+  const [reporterLoading, setReporterLoading] = useState(false);
 
   useEffect(() => {
     let q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-    
-    // Apply filters
     if (statusFilter !== 'all') {
       q = query(collection(db, 'reports'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
     }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let reportsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const reportsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Run automatic AI analysis on new reports
-      for (const report of reportsData) {
-        if (!report.aiAnalyzed && report.status === 'pending') {
-          try {
-            // Fetch user history for analysis
-            const userReportsQuery = query(
-              collection(db, 'reports'), 
-              where('userId', '==', report.userId || ''),
-              orderBy('createdAt', 'desc')
-            );
-            
-            const userReportsSnapshot = await getDocs(userReportsQuery);
-            const userHistory = userReportsSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-
-            const analysis = analyzePotentialFalseReport(report, userHistory);
-            
-            // Update report with AI analysis
-            await updateDoc(doc(db, 'reports', report.id), {
-              aiAnalyzed: true,
-              aiAnalysis: {
-                suspicionScore: analysis.suspicionScore,
-                riskLevel: analysis.riskLevel,
-                isSuspicious: analysis.isSuspicious,
-                confidencePercentage: analysis.confidencePercentage,
-                analyzedAt: new Date()
-              }
-            });
-
-            // Auto-flag highly suspicious reports
-            if (shouldAutoFlag(analysis)) {
-              await updateDoc(doc(db, 'reports', report.id), {
-                aiAutoFlagged: true,
-                status: 'flagged_false',
-                isFalsePositive: true,
-                falsePositiveReason: 'Automatically flagged by AI: ' + analysis.suspiciousFactors.join(', '),
-                flaggedAt: new Date(),
-                flaggedBy: 'AI_System'
-              });
-
-              console.log(`Report ${report.id} auto-flagged by AI`);
-            }
-
-          } catch (error) {
-            console.error('Error running automatic AI analysis:', error);
-          }
-        }
+      // Apply priority filter on client side
+      if (priorityFilter !== 'all') {
+        reportsData = reportsData.filter(report => report.priority === priorityFilter);
       }
-      
-      // Apply priority filter on client side (Firestore compound queries can be complex)
-      const filteredReports = priorityFilter === 'all' 
-        ? reportsData 
-        : reportsData.filter(report => report.priority === priorityFilter);
-      
-      setReports(filteredReports);
+      // Apply date range filter
+      if (startDate) {
+        const sDate = new Date(startDate);
+        reportsData = reportsData.filter(r => r.createdAt && r.createdAt.toDate && r.createdAt.toDate() >= sDate);
+      }
+      if (endDate) {
+        const eDate = new Date(endDate);
+        eDate.setHours(23,59,59,999);
+        reportsData = reportsData.filter(r => r.createdAt && r.createdAt.toDate && r.createdAt.toDate() <= eDate);
+      }
+
+      // Apply search filter
+      if (search.trim()) {
+        const s = search.trim().toLowerCase();
+        reportsData = reportsData.filter(r =>
+          (r.title && r.title.toLowerCase().includes(s)) ||
+          (r.description && r.description.toLowerCase().includes(s)) ||
+          (r.category && r.category.toLowerCase().includes(s))
+        );
+      }
+      setReports(reportsData);
       setLoading(false);
     });
-
     return () => unsubscribe();
-  }, [statusFilter, priorityFilter]);
+  }, [statusFilter, priorityFilter, search, endDate, startDate]);
 
   const handleUpdateStatus = async (reportId, newStatus) => {
     try {
@@ -220,125 +185,91 @@ export default function ReportsManagement({ userRole }) {
   const handleAIAnalysis = async (report) => {
     try {
       setReportToAnalyze(report);
-      showSnackbar('Analyzing report with AI...', 'info');
-
-      // Call server-side moderation endpoint (preferred)
-      const MODERATION_ENDPOINT =
-        process.env.REACT_APP_MODERATION_ENDPOINT ||
-        'https://us-central1-your-project.cloudfunctions.net/moderationAnalyze';
-
-      let analysisData = null;
-      try {
-        const resp = await fetch(MODERATION_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: report.title,
-            description: report.description,
-            media: report.media || [],
-            userId: report.userId || null,
-            postId: report.id,
-            type: 'report'
-          })
-        });
-
-        if (resp.ok) {
-          analysisData = await resp.json();
-        } else {
-          const errBody = await resp.text().catch(() => '');
-          console.warn('Moderation endpoint error:', resp.status, errBody);
-        }
-      } catch (endpointErr) {
-        console.warn('Moderation endpoint failed, falling back to local service:', endpointErr.message);
-      }
-
-      // Fallback to local ModerationService if endpoint fails
-      if (!analysisData) {
-        try {
-          const userReportsQuery = query(
-            collection(db, 'reports'), 
-            where('userId', '==', report.userId || ''),
-            orderBy('createdAt', 'desc')
-          );
-          
-          const userReportsSnapshot = await getDocs(userReportsQuery);
-          const userHistory = userReportsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-
-          const aiResult = await ModerationService.analyzeReport({
-            title: report.title,
-            description: report.description,
-            category: report.category,
-            priority: report.priority,
-            anonymous: report.anonymous,
-            userReportCount: userHistory.length
-          });
-
-          if (aiResult.success) {
-            analysisData = {
-              allowed: aiResult.analysis.isLegitimate,
-              violationType: aiResult.analysis.severity,
-              confidence: aiResult.analysis.legitimacyConfidence,
-              message: aiResult.analysis.reasoning,
-              details: {
-                suspicionScore: (100 - aiResult.analysis.legitimacyConfidence),
-                riskLevel: aiResult.analysis.riskLevel,
-                credibilityScore: aiResult.analysis.credibilityScore,
-                suspiciousFactors: aiResult.analysis.suspiciousFactors,
-                recommendations: aiResult.analysis.recommendations
-              }
-            };
-          } else {
-            throw new Error(aiResult.error || 'Local analysis failed');
-          }
-        } catch (fallbackErr) {
-          console.error('Both endpoint and local service failed:', fallbackErr);
-          showSnackbar('Failed to run AI analysis: ' + (fallbackErr?.message || 'Unknown error'), 'error');
-          return;
-        }
-      }
-
-      // Display results
-      const isSuspicious = !analysisData.allowed;
-      // Normalize riskLevel to uppercase for UI comparisons, compute true suspicion score
-      const rawConfidence = typeof analysisData.confidence === 'number' ? analysisData.confidence : (analysisData.confidence ? Number(analysisData.confidence) : 0);
-      const computedSuspicion = Math.round(100 - rawConfidence);
-      const rawRisk = (analysisData.details?.riskLevel || (isSuspicious ? 'high' : 'low')).toString();
-      const normalizedRisk = rawRisk.toUpperCase();
-
-      setAnalysisResult({
-        suspicionScore: computedSuspicion,
-        riskLevel: normalizedRisk,
-        isSuspicious,
-        legitimacyConfidence: rawConfidence,
-        confidencePercentage: rawConfidence,
-        credibilityScore: analysisData.details?.credibilityScore || rawConfidence,
-        severity: analysisData.violationType,
-        suspiciousFactors: analysisData.details?.suspiciousFactors || [],
-        recommendations: analysisData.details?.recommendations || [],
-        reasoning: analysisData.message,
-        analyzedAt: new Date()
-      });
-      
+      setAnalysisResult(null);
       setAiAnalysisDialogOpen(true);
+      showSnackbar('Running AI triage...', 'info');
 
-      if (isSuspicious) {
-        showSnackbar('⚠️ AI flagged this report as potentially suspicious - review recommended', 'warning');
-      } else {
-        showSnackbar('✅ AI analysis completed - report appears legitimate', 'success');
+      // Fetch user report history for context
+      let userReportCount = 0;
+      let userFalseReportsCount = 0;
+      if (report.userId) {
+        try {
+          const userReportsSnapshot = await getDocs(
+            query(collection(db, 'reports'), where('userId', '==', report.userId))
+          );
+          userReportCount = userReportsSnapshot.size;
+          const falseReports = userReportsSnapshot.docs.filter(d => d.data().isFalsePositive);
+          userFalseReportsCount = falseReports.length;
+        } catch (_) {}
       }
 
+      const result = await ModerationService.autoTriageReport({
+        title: report.title,
+        description: report.description,
+        category: report.category,
+        priority: report.priority,
+        anonymous: report.anonymous,
+        images: report.media || report.images || [],
+        userReportCount,
+        userFalseReportsCount,
+      });
+
+      if (!result.success) throw new Error(result.error || 'Triage failed');
+
+      const t = result.triage;
+      setAnalysisResult({
+        suspicionScore: 100 - t.legitimacyConfidence,
+        riskLevel: (t.riskLevel || 'low').toUpperCase(),
+        isSuspicious: t.shouldFlag,
+        legitimacyConfidence: t.legitimacyConfidence,
+        confidencePercentage: t.legitimacyConfidence,
+        credibilityScore: t.legitimacyConfidence,
+        verdictLabel: t.verdictLabel,
+        verdictColor: t.verdictColor,
+        recommendedAction: t.recommendedAction,
+        suggestedPriority: t.suggestedPriority,
+        suspiciousFactors: t.suspiciousFactors || [],
+        recommendations: t.recommendations || [],
+        reasoning: t.reasoning,
+        analysisMethod: t.analysisMethod,
+        usedFallback: result.usedFallback,
+        analyzedAt: new Date(),
+        detectedLanguage: t.detectedLanguage || null,
+        reportType: t.reportType || null,
+        tokensUsed: t.tokensUsed || 0,
+      });
+
+      if (t.shouldFlag) {
+        showSnackbar('AI flagged this report as high risk — review recommended', 'warning');
+      } else if (t.recommendedAction === 'review') {
+        showSnackbar('AI suggests manual review for this report', 'info');
+      } else {
+        showSnackbar('AI triage complete — report appears legitimate', 'success');
+      }
     } catch (error) {
-      console.error('Error running AI analysis:', error);
-      showSnackbar('Failed to run AI analysis: ' + (error?.message || 'Unknown error'), 'error');
+      console.error('AI triage error:', error);
+      showSnackbar('AI triage failed: ' + (error?.message || 'Unknown error'), 'error');
+      setAiAnalysisDialogOpen(false);
     }
   };
 
-  const handleViewDetails = (report) => {
+  const handleViewDetails = async (report) => {
     setSelectedReport(report);
     setDialogOpen(true);
+    setReporterInfo(null);
+    if (report.userId && !report.anonymous) {
+      try {
+        setReporterLoading(true);
+        const userSnap = await getDoc(doc(db, 'users', report.userId));
+        if (userSnap.exists()) {
+          setReporterInfo(userSnap.data());
+        }
+      } catch (e) {
+        console.warn('Could not fetch reporter:', e);
+      } finally {
+        setReporterLoading(false);
+      }
+    }
   };
 
   const handleDeleteReport = async (reportId) => {
@@ -358,6 +289,39 @@ export default function ReportsManagement({ userRole }) {
 
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
+  };
+
+  const exportCSV = (rows) => {
+    if (!rows || rows.length === 0) return showSnackbar('No data to export', 'info');
+    const cols = ['id','title','status','priority','category','reporterName','createdAt'];
+    const csvRows = rows.map(r => {
+      const created = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toISOString() : '';
+      return [r.id, (r.title||''), (r.status||''), (r.priority||''), (r.category||''), (r.reporterName||''), created]
+        .map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
+    });
+    const csv = [cols.join(',')].concat(csvRows).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reports_export_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showSnackbar('CSV exported', 'success');
+  };
+
+  const handleBulkUpdateStatus = async (newStatus) => {
+    if (!selectionModel || selectionModel.length === 0) return showSnackbar('No rows selected', 'info');
+    try {
+      for (const id of selectionModel) {
+        await updateDoc(doc(db, 'reports', id), { status: newStatus, updatedAt: new Date(), updatedBy: 'admin' });
+      }
+      showSnackbar(`Updated ${selectionModel.length} reports to ${newStatus}`, 'success');
+      setSelectionModel([]);
+    } catch (error) {
+      console.error('Bulk update failed', error);
+      showSnackbar('Bulk update failed', 'error');
+    }
   };
 
   const getPriorityColor = (priority) => {
@@ -380,329 +344,308 @@ export default function ReportsManagement({ userRole }) {
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'resolved': return <CheckCircle />;
-      case 'pending': return <Pending />;
-      case 'in_progress': return <Assignment />;
-      default: return <Pending />;
-    }
-  };
 
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Reports Management
       </Typography>
-      
-      {loading && <LinearProgress sx={{ mb: 2 }} />}
 
-      {/* Filters */}
-      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Status Filter</InputLabel>
-              <Select
-                value={statusFilter}
-                label="Status Filter"
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">All Status</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="in_progress">In Progress</MenuItem>
-                <MenuItem value="resolved">Resolved</MenuItem>
-                <MenuItem value="rejected">Rejected</MenuItem>
-                <MenuItem value="flagged_false">Flagged as False</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Priority Filter</InputLabel>
-              <Select
-                value={priorityFilter}
-                label="Priority Filter"
-                onChange={(e) => setPriorityFilter(e.target.value)}
-              >
-                <MenuItem value="all">All Priorities</MenuItem>
-                <MenuItem value="critical">Critical</MenuItem>
-                <MenuItem value="high">High</MenuItem>
-                <MenuItem value="medium">Medium</MenuItem>
-                <MenuItem value="low">Low</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="body2" color="text.secondary">
-              Total Reports: {reports.length}
-            </Typography>
-          </Grid>
-        </Grid>
+      {/* Sticky Filter/Search Bar */}
+      <Paper elevation={2} sx={{
+        p: 2,
+        mb: 3,
+        position: 'sticky',
+        top: 80,
+        zIndex: 10,
+        borderRadius: 3,
+        boxShadow: '0 2px 8px 0 rgba(60,64,67,.08)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 2,
+        alignItems: 'center',
+      }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Status</InputLabel>
+          <Select
+            value={statusFilter}
+            label="Status"
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <MenuItem value="all">All Status</MenuItem>
+            <MenuItem value="pending">Pending</MenuItem>
+            <MenuItem value="in_progress">In Progress</MenuItem>
+            <MenuItem value="resolved">Resolved</MenuItem>
+            <MenuItem value="rejected">Rejected</MenuItem>
+            <MenuItem value="flagged_false">Flagged as False</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Priority</InputLabel>
+          <Select
+            value={priorityFilter}
+            label="Priority"
+            onChange={(e) => setPriorityFilter(e.target.value)}
+          >
+            <MenuItem value="all">All Priorities</MenuItem>
+            <MenuItem value="critical">Critical</MenuItem>
+            <MenuItem value="high">High</MenuItem>
+            <MenuItem value="medium">Medium</MenuItem>
+            <MenuItem value="low">Low</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          label="Start"
+          type="date"
+          size="small"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+        />
+        <TextField
+          label="End"
+          type="date"
+          size="small"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+        />
+        <Button variant="outlined" size="small" startIcon={<SaveAlt />} onClick={() => exportCSV(reports)} sx={{ ml: 'auto' }}>
+          Export CSV
+        </Button>
+        <Button variant="contained" color="primary" size="small" sx={{ ml: 1 }} disabled={selectionModel.length===0} onClick={() => handleBulkUpdateStatus('resolved')}>
+          Mark Resolved ({selectionModel.length})
+        </Button>
+        <TextField
+          size="small"
+          placeholder="Search reports..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          sx={{ minWidth: 220 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
+            endAdornment: search && (
+              <IconButton size="small" onClick={() => setSearch('')}>
+                <Delete fontSize="small" />
+              </IconButton>
+            )
+          }}
+        />
+        <Divider orientation="vertical" flexItem sx={{ mx: 2, display: { xs: 'none', sm: 'block' } }} />
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+          Total: {reports.length}
+        </Typography>
       </Paper>
 
-      {/* Reports Grid */}
-      <Grid container spacing={2}>
-        {reports.map((report) => (
-          <Grid item xs={12} md={6} lg={4} key={report.id}>
-            <Card elevation={2}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  {getStatusIcon(report.status)}
-                  <Typography variant="h6" sx={{ ml: 1, flexGrow: 1 }} noWrap>
-                    {report.title || 'Untitled Report'}
-                  </Typography>
-                </Box>
-
-                {/* Display media images if available */}
-                {report.media && report.media.length > 0 && (
-                  <Box sx={{ mb: 2, display: 'flex', gap: 1, overflow: 'auto' }}>
-                    {report.media.slice(0, 3).map((imageUrl, index) => (
-                      <Box
-                        key={index}
-                        component="img"
-                        src={imageUrl}
-                        alt={`Report media ${index + 1}`}
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          objectFit: 'cover',
-                          borderRadius: 1,
-                          cursor: 'pointer',
-                          '&:hover': { opacity: 0.8 }
-                        }}
-                        onClick={() => window.open(imageUrl, '_blank')}
-                      />
-                    ))}
-                    {report.media.length > 3 && (
-                      <Box
-                        sx={{
-                          width: 80,
-                          height: 80,
-                          borderRadius: 1,
-                          bgcolor: 'grey.200',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <Typography variant="caption">
-                          +{report.media.length - 3}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
+      {/* Reports Table */}
+      <Box sx={{ height: 600, width: '100%', background: '#fff', borderRadius: 3, boxShadow: 1, mb: 3 }}>
+        <DataGrid
+          rows={reports.map(r => ({ ...r, id: r.id }))}
+          columns={[
+            { field: 'title', headerName: 'Title', flex: 1, minWidth: 160, renderCell: (params) => params.value || 'Untitled Report' },
+            { field: 'status', headerName: 'Status', minWidth: 120, renderCell: (params) => <Chip label={params.value} color={getStatusColor(params.value)} size="small" /> },
+            { field: 'priority', headerName: 'Priority', minWidth: 110, renderCell: (params) => <Chip label={params.value} color={getPriorityColor(params.value)} size="small" /> },
+            { field: 'category', headerName: 'Category', minWidth: 120 },
+            { field: 'reporterName', headerName: 'Reporter', minWidth: 120, renderCell: (params) => params.row.anonymous ? 'Anonymous' : (params.value || 'Unknown') },
+            { field: 'createdAt', headerName: 'Date', minWidth: 140, valueGetter: (params) => params.value?.toDate ? params.value.toDate().toLocaleDateString() : '', },
+            { field: 'actions', headerName: 'Actions', minWidth: 220, sortable: false, filterable: false, renderCell: (params) => (
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Tooltip title="View Details"><IconButton size="small" onClick={() => handleViewDetails(params.row)}><Visibility fontSize="small" /></IconButton></Tooltip>
+                <Tooltip title="AI Check"><IconButton size="small" color="info" onClick={() => handleAIAnalysis(params.row)}><Assignment fontSize="small" /></IconButton></Tooltip>
+                <Tooltip title="Print"><IconButton size="small" color="primary" onClick={() => { setReportToPrint(params.row); setPrintDialogOpen(true); }}><Print fontSize="small" /></IconButton></Tooltip>
+                {!params.row.isFalsePositive && params.row.status !== 'resolved' && (
+                  <Tooltip title="Flag as False"><IconButton size="small" color="error" onClick={() => handleFlagAsFalse(params.row)}><Flag fontSize="small" /></IconButton></Tooltip>
                 )}
-
-                <Box sx={{ mb: 2 }}>
-                  <Chip 
-                    label={report.status || 'pending'} 
-                    color={getStatusColor(report.status)}
-                    size="small"
-                    sx={{ mr: 1, mb: 1 }}
-                  />
-                  <Chip 
-                    label={report.priority || 'medium'} 
-                    color={getPriorityColor(report.priority)}
-                    size="small"
-                    sx={{ mr: 1, mb: 1 }}
-                  />
-                  <Chip 
-                    label={report.category || 'General'} 
-                    variant="outlined"
-                    size="small"
-                    sx={{ mr: 1, mb: 1 }}
-                  />
-                  {report.aiAnalysis && (
-                    <Chip 
-                      label={`AI: ${report.aiAnalysis.riskLevel}`}
-                      color={report.aiAnalysis.riskLevel === 'HIGH' ? 'error' : report.aiAnalysis.riskLevel === 'MEDIUM' ? 'warning' : 'success'}
-                      size="small"
-                      sx={{ mr: 1, mb: 1 }}
-                    />
-                  )}
-                  {report.aiAutoFlagged && (
-                    <Chip 
-                      label="Auto-Flagged"
-                      color="error"
-                      size="small"
-                      icon={<Warning />}
-                      sx={{ mb: 1 }}
-                    />
-                  )}
-                </Box>
-
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} noWrap>
-                  {report.description || 'No description provided'}
-                </Typography>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Person sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="caption">
-                    {report.anonymous ? 'Anonymous' : (report.reporterName || 'Unknown')}
-                  </Typography>
-                </Box>
-
-                {report.location && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <LocationOn sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                    <Typography variant="caption">
-                      {report.location.building} - {report.location.room}
-                    </Typography>
-                  </Box>
+                {params.row.isFalsePositive && (
+                  <Tooltip title="False Report"><ReportProblem color="error" fontSize="small" /></Tooltip>
                 )}
-
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <CalendarToday sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                  <Typography variant="caption">
-                    {report.createdAt?.toDate()?.toLocaleDateString() || 'Unknown date'}
-                  </Typography>
-                </Box>
-              </CardContent>
-
-              <CardActions>
-                <Button 
-                  size="small" 
-                  onClick={() => handleViewDetails(report)}
-                  startIcon={<Visibility />}
-                >
-                  View Details
-                </Button>
-                {report.status === 'pending' && (
-                  <Button 
-                    size="small" 
-                    color="primary"
-                    onClick={() => handleUpdateStatus(report.id, 'in_progress')}
-                  >
-                    Start Review
-                  </Button>
-                )}
-                {report.status === 'in_progress' && (
-                  <Button 
-                    size="small" 
-                    color="success"
-                    onClick={() => handleUpdateStatus(report.id, 'resolved')}
-                  >
-                    Mark Resolved
-                  </Button>
-                )}
-                <Button 
-                  size="small" 
-                  color="info"
-                  onClick={() => handleAIAnalysis(report)}
-                  startIcon={<Assignment />}
-                >
-                  AI Check
-                </Button>
-                <Button 
-                  size="small" 
-                  color="primary"
-                  onClick={() => {
-                    setReportToPrint(report);
-                    setPrintDialogOpen(true);
-                  }}
-                  startIcon={<Print />}
-                >
-                  Print
-                </Button>
-                {!report.isFalsePositive && report.status !== 'resolved' && (
-                  <Button 
-                    size="small" 
-                    color="error"
-                    onClick={() => handleFlagAsFalse(report)}
-                    startIcon={<Flag />}
-                  >
-                    Flag False
-                  </Button>
-                )}
-                {report.isFalsePositive && (
-                  <Chip 
-                    label="False Report" 
-                    color="error" 
-                    size="small"
-                    icon={<Warning />}
-                  />
-                )}
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      {reports.length === 0 && !loading && (
-        <Paper elevation={1} sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary">
-            No reports found
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {statusFilter !== 'all' || priorityFilter !== 'all' 
-              ? 'Try adjusting your filters'
-              : 'Reports will appear here when submitted'
-            }
-          </Typography>
-        </Paper>
-      )}
+              </Box>
+            ) },
+          ]}
+          loading={loading}
+          checkboxSelection
+          selectionModel={selectionModel}
+          onSelectionModelChange={(newSelection) => setSelectionModel(newSelection)}
+          pageSize={10}
+          rowsPerPageOptions={[10, 25, 50]}
+          disableSelectionOnClick
+          sx={{
+            border: 0,
+            fontSize: '0.95rem',
+            '& .MuiDataGrid-columnHeaders': { background: '#f8f9fa', fontWeight: 700 },
+            '& .MuiDataGrid-row:hover': { background: '#f1f3f4' },
+            '& .MuiDataGrid-footerContainer': { background: '#f8f9fa' },
+          }}
+          getRowHeight={() => 48}
+          autoHeight={false}
+        />
+      </Box>
 
       {/* Report Details Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
         {selectedReport && (
           <>
-            <DialogTitle>
-              Report Details: {selectedReport.title || 'Untitled Report'}
+            <DialogTitle sx={{ pb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Assignment color="primary" />
+                <Box>
+                  <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+                    {selectedReport.title || 'Untitled Report'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ID: {selectedReport.id}
+                  </Typography>
+                </Box>
+              </Box>
             </DialogTitle>
-            <DialogContent>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>Status</Typography>
-                  <Chip 
-                    label={selectedReport.status || 'pending'} 
-                    color={getStatusColor(selectedReport.status)}
-                    sx={{ mb: 2 }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>Priority</Typography>
-                  <Chip 
-                    label={selectedReport.priority || 'medium'} 
-                    color={getPriorityColor(selectedReport.priority)}
-                    sx={{ mb: 2 }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>Description</Typography>
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    {selectedReport.description || 'No description provided'}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>Reporter</Typography>
-                  <Typography variant="body2">
-                    {selectedReport.anonymous ? 'Anonymous' : (selectedReport.reporterName || 'Unknown')}
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" gutterBottom>Category</Typography>
-                  <Typography variant="body2">
-                    {selectedReport.category || 'General'}
-                  </Typography>
-                </Grid>
-                {selectedReport.location && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" gutterBottom>Location</Typography>
-                    <Typography variant="body2">
-                      {selectedReport.location.building} - {selectedReport.location.room}
-                    </Typography>
-                  </Grid>
+            <Divider />
+            <DialogContent sx={{ pt: 2.5 }}>
+              {/* Status + Priority row */}
+              <Box sx={{ display: 'flex', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
+                <Box>
+                  <Typography variant="overline" color="text.secondary" display="block">Status</Typography>
+                  <Chip label={selectedReport.status || 'pending'} color={getStatusColor(selectedReport.status)}
+                    sx={{ fontWeight: 600, textTransform: 'capitalize' }} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" color="text.secondary" display="block">Priority</Typography>
+                  <Chip label={selectedReport.priority || 'medium'} color={getPriorityColor(selectedReport.priority)}
+                    sx={{ fontWeight: 600, textTransform: 'capitalize' }} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" color="text.secondary" display="block">Category</Typography>
+                  <Chip label={selectedReport.category || 'general'} variant="outlined"
+                    sx={{ fontWeight: 500, textTransform: 'capitalize' }} />
+                </Box>
+                {selectedReport.anonymous && (
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" display="block">Reporter</Typography>
+                    <Chip label="Anonymous" variant="outlined" color="default" sx={{ fontWeight: 500 }} />
+                  </Box>
                 )}
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>Submitted</Typography>
-                  <Typography variant="body2">
-                    {selectedReport.createdAt?.toDate()?.toLocaleString() || 'Unknown date'}
+              </Box>
+
+              {/* Description */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>Description</Typography>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                  <Typography variant="body2" sx={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {selectedReport.description || 'No description provided.'}
                   </Typography>
-                </Grid>
-              </Grid>
+                </Paper>
+              </Box>
+
+              {/* Reporter info */}
+              {!selectedReport.anonymous && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>Reporter</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    {reporterLoading ? (
+                      <Typography variant="body2" color="text.secondary">Loading reporter info…</Typography>
+                    ) : reporterInfo ? (
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="caption" color="text.secondary" display="block">Full Name</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {reporterInfo.displayName || reporterInfo.fullName || reporterInfo.name || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="caption" color="text.secondary" display="block">Email</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {reporterInfo.email || '—'}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block">Role</Typography>
+                          <Typography variant="body2">{reporterInfo.role || '—'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block">Department</Typography>
+                          <Typography variant="body2">{reporterInfo.department || reporterInfo.course || '—'}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="caption" color="text.secondary" display="block">Student / Staff ID</Typography>
+                          <Typography variant="body2">{reporterInfo.studentId || reporterInfo.employeeId || reporterInfo.idNumber || '—'}</Typography>
+                        </Grid>
+                      </Grid>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        {selectedReport.reporterName || selectedReport.userEmail || `User ID: ${selectedReport.userId || 'Unknown'}`}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Box>
+              )}
+
+              {/* Location */}
+              {selectedReport.location && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>Location</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="body2">
+                      {typeof selectedReport.location === 'string'
+                        ? selectedReport.location
+                        : [selectedReport.location.building, selectedReport.location.room,
+                           selectedReport.location.floor, selectedReport.location.description]
+                            .filter(Boolean).join(' — ') || '—'}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
+
+              {/* Submitted date */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" fontWeight={700} gutterBottom>Submitted</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedReport.createdAt?.toDate?.()?.toLocaleString('en-PH', {
+                    dateStyle: 'long', timeStyle: 'short'
+                  }) || 'Unknown date'}
+                </Typography>
+              </Box>
+
+              {/* Images / Evidence */}
+              {(() => {
+                const imgs = selectedReport.images || selectedReport.media || [];
+                if (!imgs.length) return null;
+                return (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                      Evidence / Attachments ({imgs.length})
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 1.5 }}>
+                      {imgs.map((url, i) => (
+                        <Box key={i} component="a" href={url} target="_blank" rel="noopener noreferrer"
+                          sx={{
+                            display: 'block', borderRadius: 2, overflow: 'hidden',
+                            border: '1.5px solid', borderColor: 'divider',
+                            aspectRatio: '4/3',
+                            transition: 'transform .15s, box-shadow .15s',
+                            '&:hover': { transform: 'scale(1.03)', boxShadow: 4 },
+                          }}>
+                          <Box component="img" src={url} alt={`Evidence ${i + 1}`}
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            onError={e => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.style.background = '#f1f5f9';
+                              e.target.parentElement.innerHTML +=
+                                '<div style="text-align:center;padding:12px;font-size:12px;color:#94a3b8">Image unavailable</div>';
+                            }}
+                          />
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                );
+              })()}
             </DialogContent>
-            <DialogActions>
+            <Divider />
+            <DialogActions sx={{ px: 3, py: 1.5, gap: 1 }}>
               <Button onClick={() => setDialogOpen(false)}>Close</Button>
               <Button 
                 variant="outlined" 
@@ -800,119 +743,154 @@ export default function ReportsManagement({ userRole }) {
         </DialogActions>
       </Dialog>
 
-      {/* AI Analysis Dialog */}
+      {/* AI Triage Dialog */}
       <Dialog open={aiAnalysisDialogOpen} onClose={() => setAiAnalysisDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Assignment sx={{ mr: 1, color: 'info.main' }} />
-            AI Report Analysis
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Assignment sx={{ color: 'info.main' }} />
+            AI Triage Report
+            {analysisResult && (
+              <Chip
+                label={analysisResult.verdictLabel || (analysisResult.isSuspicious ? 'High Risk' : 'Cleared')}
+                color={analysisResult.verdictColor || (analysisResult.isSuspicious ? 'error' : 'success')}
+                size="small"
+                sx={{ ml: 1 }}
+              />
+            )}
           </Box>
         </DialogTitle>
         <DialogContent>
-          {reportToAnalyze && analysisResult && (
+          {reportToAnalyze && (
             <>
-              <Typography variant="h6" gutterBottom>
-                Report: {reportToAnalyze.title || 'Untitled Report'}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {reportToAnalyze.title || 'Untitled Report'} &middot; {reportToAnalyze.category || 'General'}
               </Typography>
-              
-              <Box sx={{ mb: 3 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
-                    <Card sx={{ p: 2, textAlign: 'center', bgcolor: analysisResult.riskLevel === 'HIGH' ? 'error.light' : analysisResult.riskLevel === 'MEDIUM' ? 'warning.light' : 'success.light' }}>
-                      <Typography variant="h4" color={analysisResult.riskLevel === 'HIGH' ? 'error.dark' : analysisResult.riskLevel === 'MEDIUM' ? 'warning.dark' : 'success.dark'}>
-                        {analysisResult.confidencePercentage}%
-                      </Typography>
-                      <Typography variant="body2">
-                        Suspicion Level
-                      </Typography>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Card sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h5">
-                        {analysisResult.riskLevel}
-                      </Typography>
-                      <Typography variant="body2">
-                        Risk Level
-                      </Typography>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Card sx={{ p: 2, textAlign: 'center' }}>
-                      <Typography variant="h5">
-                        {analysisResult.isSuspicious ? 'SUSPICIOUS' : 'NORMAL'}
-                      </Typography>
-                      <Typography variant="body2">
-                        AI Verdict
-                      </Typography>
-                    </Card>
-                  </Grid>
-                </Grid>
-              </Box>
 
-              <Alert 
-                severity={analysisResult.riskLevel === 'high' || analysisResult.riskLevel === 'critical' ? 'error' : analysisResult.riskLevel === 'medium' ? 'warning' : 'info'} 
-                sx={{ mb: 2 }}
-              >
-                <strong>Analysis:</strong> {analysisResult.reasoning || 'Report analyzed'}
-              </Alert>
-
-              {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Recommendations:
-                  </Typography>
-                  <ul>
-                    {analysisResult.recommendations.map((rec, index) => (
-                      <li key={index}>
-                        <Typography variant="body2">{rec}</Typography>
-                      </li>
-                    ))}
-                  </ul>
+              {!analysisResult && (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Running AI analysis...</Typography>
                 </Box>
               )}
 
-              {analysisResult.suspiciousFactors && analysisResult.suspiciousFactors.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Suspicious Factors Detected:
-                  </Typography>
-                  <ul>
-                    {analysisResult.suspiciousFactors.map((factor, index) => (
-                      <li key={index}>
-                        <Typography variant="body2">{factor}</Typography>
-                      </li>
-                    ))}
-                  </ul>
-                </Box>
-              )}
+              {analysisResult && (
+                <>
+                  <Grid container spacing={2} sx={{ mt: 1, mb: 3 }}>
+                    <Grid item xs={6} sm={3}>
+                      <Card sx={{ p: 2, textAlign: 'center', bgcolor:
+                        analysisResult.riskLevel === 'HIGH' ? '#fce8e6' :
+                        analysisResult.riskLevel === 'MEDIUM' ? '#fef9e7' : '#e6f4ea' }}>
+                        <Typography variant="h4" fontWeight={700} color={
+                          analysisResult.riskLevel === 'HIGH' ? 'error.main' :
+                          analysisResult.riskLevel === 'MEDIUM' ? 'warning.main' : 'success.main'}>
+                          {analysisResult.legitimacyConfidence}%
+                        </Typography>
+                        <Typography variant="caption">Legitimacy</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Card sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="h5" fontWeight={700}>{analysisResult.riskLevel}</Typography>
+                        <Typography variant="caption">Risk Level</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Card sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="h5" fontWeight={700}
+                          color={analysisResult.recommendedAction === 'flag' ? 'error.main' :
+                                 analysisResult.recommendedAction === 'review' ? 'warning.main' : 'success.main'}>
+                          {(analysisResult.recommendedAction || 'review').toUpperCase()}
+                        </Typography>
+                        <Typography variant="caption">Recommended</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3}>
+                      <Card sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {analysisResult.analysisMethod?.includes('gpt') ? 'GPT-4o' :
+                           analysisResult.analysisMethod === 'gpt-4o-mini + perspective' ? 'GPT + Perspective' :
+                           analysisResult.analysisMethod === 'perspective_api' ? 'Perspective API' :
+                           analysisResult.analysisMethod === 'keyword_precheck' ? 'Keyword Check' : 'Heuristic'}
+                        </Typography>
+                        <Typography variant="caption">AI Method</Typography>
+                      </Card>
+                    </Grid>
+                  </Grid>
 
-              <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Report Content:
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Description:</strong> {reportToAnalyze.description || 'No description'}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Category:</strong> {reportToAnalyze.category || 'General'}
-                </Typography>
-              </Box>
+                  <Alert
+                    severity={analysisResult.riskLevel === 'HIGH' ? 'error' : analysisResult.riskLevel === 'MEDIUM' ? 'warning' : 'success'}
+                    sx={{ mb: 2 }}
+                  >
+                    <strong>AI Reasoning:</strong> {analysisResult.reasoning || 'Analysis complete'}
+                    {analysisResult.usedFallback && (
+                      <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.7 }}>
+                        (Heuristic fallback — AI API unavailable)
+                      </Typography>
+                    )}
+                  </Alert>
+
+                  {(analysisResult.detectedLanguage || analysisResult.reportType) && (
+                    <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {analysisResult.detectedLanguage && (
+                        <Chip icon={<span>🌐</span>} label={`Language: ${analysisResult.detectedLanguage}`} size="small" variant="outlined" color="info" />
+                      )}
+                      {analysisResult.reportType && (
+                        <Chip icon={<span>🏷️</span>} label={`Type: ${analysisResult.reportType}`} size="small" variant="outlined" color="default" />
+                      )}
+                      {analysisResult.tokensUsed > 0 && (
+                        <Chip label={`${analysisResult.tokensUsed} tokens`} size="small" variant="outlined" sx={{ opacity: 0.6 }} />
+                      )}
+                    </Box>
+                  )}
+
+                  {analysisResult.suspiciousFactors.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>Suspicious Factors:</Typography>
+                      {analysisResult.suspiciousFactors.map((f, i) => (
+                        <Chip key={i} label={f} color="error" size="small" variant="outlined" sx={{ mr: 0.5, mb: 0.5 }} />
+                      ))}
+                    </Box>
+                  )}
+
+                  {analysisResult.recommendations.length > 0 && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>Recommendations:</Typography>
+                      {analysisResult.recommendations.map((r, i) => (
+                        <Typography key={i} variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          &bull; {r}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+
+                  <Box sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      <strong>Content:</strong> {reportToAnalyze.description || 'No description'}
+                    </Typography>
+                  </Box>
+                </>
+              )}
             </>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAiAnalysisDialogOpen(false)}>Close</Button>
-          {analysisResult && analysisResult.isSuspicious && (
-            <Button 
-              variant="contained" 
-              color="error"
-              onClick={() => {
+          {analysisResult && analysisResult.suggestedPriority && analysisResult.suggestedPriority !== reportToAnalyze?.priority && (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={async () => {
+                await updateDoc(doc(db, 'reports', reportToAnalyze.id), { priority: analysisResult.suggestedPriority, updatedAt: new Date() });
+                showSnackbar(`Priority updated to ${analysisResult.suggestedPriority}`, 'success');
                 setAiAnalysisDialogOpen(false);
-                handleFlagAsFalse(reportToAnalyze);
               }}
-              startIcon={<Flag />}
             >
+              Apply Priority: {analysisResult.suggestedPriority}
+            </Button>
+          )}
+          {analysisResult && analysisResult.isSuspicious && (
+            <Button variant="contained" color="error"
+              onClick={() => { setAiAnalysisDialogOpen(false); handleFlagAsFalse(reportToAnalyze); }}
+              startIcon={<Flag />}>
               Flag as False
             </Button>
           )}
