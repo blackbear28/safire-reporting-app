@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Safe navigation fallback for when gesture handler fails
  * This provides basic navigation without gesture dependencies
  */

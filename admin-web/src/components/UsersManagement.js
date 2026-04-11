@@ -34,7 +34,8 @@ import {
   Email,
   CalendarToday,
   CheckCircle,
-  AdminPanelSettings
+  AdminPanelSettings,
+  Assessment
 } from '@mui/icons-material';
 import {
   collection,
@@ -43,7 +44,9 @@ import {
   orderBy,
   doc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getDocs,
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -51,6 +54,7 @@ export default function UsersManagement({ userRole }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [userReportCounts, setUserReportCounts] = useState({});
   const [selectionModel, setSelectionModel] = useState([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,6 +78,20 @@ export default function UsersManagement({ userRole }) {
       setLoading(false);
     });
     return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    // Count total reports submitted per user
+    getDocs(collection(db, 'reports'))
+      .then((snap) => {
+        const counts = {};
+        snap.docs.forEach(d => {
+          const uid = d.data().userId;
+          if (uid) counts[uid] = (counts[uid] || 0) + 1;
+        });
+        setUserReportCounts(counts);
+      })
+      .catch(err => console.warn('Could not fetch report counts:', err));
   }, []);
 
   const handleViewUser = (user) => {
@@ -193,6 +211,15 @@ export default function UsersManagement({ userRole }) {
     { field: 'role', headerName: 'Role', width: 120 },
     { field: 'status', headerName: 'Status', width: 120, renderCell: (p) => <Chip label={p.value} size="small" /> },
     { field: 'createdAt', headerName: 'Joined', width: 160, valueGetter: (p) => p.row.createdAt ? (p.row.createdAt.toDate ? p.row.createdAt.toDate().toLocaleDateString() : p.row.createdAt) : '' },
+    { field: 'totalReports', headerName: 'Total Reports', width: 130, valueGetter: (p) => userReportCounts[p.row.id] || 0, renderCell: (p) => (
+      <Chip
+        icon={<Assessment fontSize="small" />}
+        label={userReportCounts[p.row.id] || 0}
+        size="small"
+        color={(userReportCounts[p.row.id] || 0) > 0 ? 'primary' : 'default'}
+        variant="outlined"
+      />
+    )},
     { field: 'actions', headerName: 'Actions', width: 220, sortable: false, filterable: false, renderCell: (p) => (
       <Box>
         <Tooltip title="View"><IconButton size="small" onClick={() => handleViewUser(p.row)}><Person /></IconButton></Tooltip>
@@ -267,6 +294,19 @@ export default function UsersManagement({ userRole }) {
             </CardContent>
           </Card>
         </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Assessment sx={{ color: 'info.main', mr: 1 }} />
+                <Box>
+                  <Typography variant="h6">{Object.values(userReportCounts).reduce((a, b) => a + b, 0)}</Typography>
+                  <Typography variant="body2" color="text.secondary">Total Reports Filed</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       <Box display="flex" alignItems="center" gap={2} mb={2}>
@@ -327,6 +367,12 @@ export default function UsersManagement({ userRole }) {
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><Email sx={{ mr: 1, color: 'text.secondary' }} /><Typography>{selectedUser.email || 'No email'}</Typography></Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}><CalendarToday sx={{ mr: 1, color: 'text.secondary' }} /><Typography>Joined: {selectedUser.createdAt?.toDate?.()?.toLocaleDateString ? selectedUser.createdAt.toDate().toLocaleDateString() : ''}</Typography></Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Assessment sx={{ mr: 1, color: 'text.secondary' }} />
+                    <Typography>
+                      Total Reports Submitted: <strong>{userReportCounts[selectedUser.id] || 0}</strong>
+                    </Typography>
+                  </Box>
                 </Box>
               )}
             </DialogContent>

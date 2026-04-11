@@ -1,4 +1,4 @@
-// Advanced Image Component with Industry Best Practices
+﻿// Advanced Image Component with Industry Best Practices
 // Used by Instagram, Twitter, Facebook, TikTok, etc.
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';

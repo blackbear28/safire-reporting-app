@@ -25,6 +25,7 @@ import UsageLogs from './components/UsageLogs';
 import MessagesManagement from './components/MessagesManagement';
 import ModerationSettings from './components/ModerationSettings';
 import ModerationLogs from './components/ModerationLogs';
+import HotspotMap from './components/HotspotMap';
 import TopBar from './components/TopBar';
 
 // Theme — Poppins / modern professional
@@ -373,6 +374,7 @@ function App() {
               <Route path="/moderation-logs" element={<ModerationLogs userRole={userRole} />} />
               <Route path="/test-feedback" element={<TestFeedbackLogs userRole={userRole} />} />
               <Route path="/usage-logs" element={<UsageLogs />} />
+              <Route path="/hotspot-map" element={<HotspotMap />} />
               <Route path="/settings" element={<Settings userRole={userRole} />} />
               <Route path="/create-admin" element={<CreateAdminUser />} />
             </Routes>

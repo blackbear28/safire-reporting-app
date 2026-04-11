@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { auth } from './firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { styles } from './styles';
 import { ReportService } from './services/reportService';
 import { usageLogger, FEATURES } from './services/usageLogger';
@@ -49,8 +50,8 @@ export default function ReportScreen({ navigation, route }) {
   
   const [title, setTitle] = useState(editMode && reportData ? reportData.title || '' : '');
   const [description, setDescription] = useState(editMode && reportData ? reportData.description || '' : '');
-  const [category, setCategory] = useState(editMode && reportData ? reportData.category || '' : '');
-  const [priority, setPriority] = useState(editMode && reportData ? reportData.priority || '' : '');
+  const [category, setCategory] = useState(editMode && reportData ? reportData.category || '' : (route?.params?.prefill?.category || ''));
+  const [priority, setPriority] = useState(editMode && reportData ? reportData.priority || '' : (route?.params?.prefill?.priority || ''));
   const [isAnonymous, setIsAnonymous] = useState(editMode && reportData ? reportData.anonymous || false : false);
   const [media, setMedia] = useState(editMode && reportData && reportData.media ? reportData.media : []);
   const [location, setLocation] = useState(editMode && reportData && reportData.location ? reportData.location : null);
@@ -122,6 +123,57 @@ export default function ReportScreen({ navigation, route }) {
     };
     trackFeature();
   }, [isAnonymous]);
+
+  // Draft key scoped to current user
+  const DRAFT_KEY = 'report_draft_' + (auth.currentUser?.uid || 'guest');
+
+  // Load saved draft on mount (only for new reports, not edits or emergency)
+  useEffect(() => {
+    if (editMode || route?.params?.prefill?.isEmergency) return;
+    const loadDraft = async () => {
+      try {
+        const json = await AsyncStorage.getItem(DRAFT_KEY);
+        if (!json) return;
+        const draft = JSON.parse(json);
+        if (!draft.title && !draft.description) return;
+        Alert.alert(
+          'Continue Draft?',
+          'You have an unfinished report. Would you like to continue where you left off?',
+          [
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: () => AsyncStorage.removeItem(DRAFT_KEY),
+            },
+            {
+              text: 'Continue',
+              onPress: () => {
+                if (draft.title) setTitle(draft.title);
+                if (draft.description) setDescription(draft.description);
+                if (draft.category) setCategory(draft.category);
+                if (draft.priority) setPriority(draft.priority);
+                if (draft.building) setBuilding(draft.building);
+                if (draft.room) setRoom(draft.room);
+              },
+            },
+          ]
+        );
+      } catch (e) {
+        console.warn('Could not load draft:', e);
+      }
+    };
+    loadDraft();
+  }, []);
+
+  // Auto-save draft to AsyncStorage (debounced 800ms)
+  useEffect(() => {
+    if (editMode || (!title && !description)) return;
+    const timer = setTimeout(() => {
+      const draft = { title, description, category, priority, building, room };
+      AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [title, description, category, priority, building, room]);
 
   // Get user location
   const getCurrentLocation = async () => {
@@ -257,6 +309,9 @@ export default function ReportScreen({ navigation, route }) {
       }
       
       if (result.success) {
+        // Clear the saved draft now that submission succeeded
+        AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
+
         // Update usage logger with accurate feature tracking
         if (media.length > 0) {
           await usageLogger.endFeature(FEATURES.SUBMIT_REPORT_WITH_MEDIA, {

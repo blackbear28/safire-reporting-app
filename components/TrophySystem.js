@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, Easing } from 'react-native';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Animated, Easing, ScrollView } from 'react-native';
 import { styles } from '../styles';
 
 // Trophy definitions with unlock criteria
@@ -53,6 +53,29 @@ export const checkUnlockedTrophies = (reportsCount) => {
   return TROPHIES.filter(trophy => reportsCount >= trophy.requirement).map(t => t.id);
 };
 
+// Level system â€” aligns with trophy thresholds
+const LEVELS = [
+  { level: 1, min: 0,   nextMin: 5,   label: 'Newcomer',    color: '#94a3b8' },
+  { level: 2, min: 5,   nextMin: 10,  label: 'Reporter',    color: '#22c55e' },
+  { level: 3, min: 10,  nextMin: 25,  label: 'Contributor', color: '#3b82f6' },
+  { level: 4, min: 25,  nextMin: 50,  label: 'Guardian',    color: '#8b5cf6' },
+  { level: 5, min: 50,  nextMin: 100, label: 'Hero',        color: '#f59e0b' },
+  { level: 6, min: 100, nextMin: null, label: 'Legend',     color: '#ef4444' },
+];
+
+const getLevelInfo = (reportsCount) => {
+  let current = LEVELS[0];
+  for (const lvl of LEVELS) {
+    if (reportsCount >= lvl.min) current = lvl;
+    else break;
+  }
+  const isMax = current.nextMin === null;
+  const progress = isMax
+    ? 1
+    : Math.min((reportsCount - current.min) / (current.nextMin - current.min), 1);
+  return { ...current, isMax, progress };
+};
+
 // Animated Trophy Icon Component
 export const AnimatedTrophyIcon = ({ isUnlocked, icon, size = 40 }) => {
   const scaleAnim = useRef(new Animated.Value(isUnlocked ? 1 : 0.8)).current;
@@ -102,76 +125,211 @@ export const AnimatedTrophyIcon = ({ isUnlocked, icon, size = 40 }) => {
 };
 
 // Trophy Display Component
-export const TrophyDisplay = ({ reportsCount, userTrophies = [] }) => {
+export const TrophyDisplay = ({ reportsCount, userTrophies = [], colors, isDarkMode }) => {
   const unlockedTrophies = checkUnlockedTrophies(reportsCount);
   const [showNewBadge, setShowNewBadge] = useState({});
 
+  // Fallback colors for when used outside AccountTab
+  const c = colors || {
+    surface: '#ffffff',
+    background: '#f5f5f5',
+    text: '#1a1a1a',
+    textSecondary: '#666666',
+    border: '#e5e7eb',
+  };
+
+  const levelInfo = getLevelInfo(reportsCount);
+  const dark = isDarkMode || false;
+
   useEffect(() => {
-    // Check for newly unlocked trophies
     const newTrophies = unlockedTrophies.filter(id => !userTrophies.includes(id));
     if (newTrophies.length > 0) {
       const badges = {};
-      newTrophies.forEach(id => {
-        badges[id] = true;
-      });
+      newTrophies.forEach(id => { badges[id] = true; });
       setShowNewBadge(badges);
-
-      // Hide badges after 5 seconds
-      setTimeout(() => {
-        setShowNewBadge({});
-      }, 5000);
+      setTimeout(() => setShowNewBadge({}), 5000);
     }
   }, [reportsCount]);
 
   return (
-    <View style={styles.trophyContainer}>
-      <View style={styles.trophyHeader}>
-        <Text style={styles.trophyTitle}>🏆 Your Trophies</Text>
-      </View>
+    <View>
+      {/* â”€â”€ Section label â”€â”€ */}
+      <Text style={{
+        fontFamily: 'Outfit-Bold',
+        fontSize: 12,
+        color: c.textSecondary,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 10,
+      }}>
+        Achievements
+      </Text>
 
-      {/* Report Stats Card */}
-      <View style={styles.reportStatsCard}>
-        <View style={styles.reportStatsLeft}>
-          <Text style={styles.reportStatsTitle}>Total Reports</Text>
-          <Text style={styles.reportStatsValue}>{reportsCount}</Text>
+      {/* â”€â”€ Level / XP card â”€â”€ */}
+      <View style={{
+        backgroundColor: c.surface,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: c.border,
+      }}>
+        {/* Level row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <View style={{
+            backgroundColor: levelInfo.color,
+            borderRadius: 20,
+            paddingHorizontal: 9,
+            paddingVertical: 3,
+            marginRight: 8,
+          }}>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 10, color: '#fff', letterSpacing: 0.5 }}>
+              LVL {levelInfo.level}
+            </Text>
+          </View>
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 15, color: c.text, flex: 1 }}>
+            {levelInfo.label}
+          </Text>
+          <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 11, color: c.textSecondary }}>
+            {levelInfo.isMax ? '🔥 Max Level' : `${reportsCount} / ${levelInfo.nextMin}`}
+          </Text>
         </View>
-        <Text style={styles.reportStatsIcon}>📊</Text>
+
+        {/* XP progress bar */}
+        <View style={{
+          height: 7,
+          backgroundColor: dark ? '#334155' : '#e2e8f0',
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}>
+          <View style={{
+            height: 7,
+            width: `${Math.round(levelInfo.progress * 100)}%`,
+            backgroundColor: levelInfo.color,
+            borderRadius: 4,
+          }} />
+        </View>
+
+        {/* Sub-labels */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+          <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 10, color: c.textSecondary }}>
+            {unlockedTrophies.length} / {TROPHIES.length} trophies earned
+          </Text>
+          {!levelInfo.isMax && (
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 10, color: c.textSecondary }}>
+              {levelInfo.nextMin - reportsCount} more to level {levelInfo.level + 1}
+            </Text>
+          )}
+        </View>
       </View>
 
-      {/* Trophy Grid */}
-      <View style={styles.trophyGrid}>
+      {/* â”€â”€ Trophy horizontal scroll â”€â”€ */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginHorizontal: -16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+      >
         {TROPHIES.map((trophy) => {
           const isUnlocked = unlockedTrophies.includes(trophy.id);
           const isNew = showNewBadge[trophy.id];
-          
+          const progress = Math.min(reportsCount / trophy.requirement, 1);
+
           return (
-            <View
-              key={trophy.id}
-              style={[
-                styles.trophyItem,
-                isUnlocked && styles.trophyItemUnlocked,
-              ]}
-            >
+            <View key={trophy.id} style={{
+              width: 84,
+              alignItems: 'center',
+              backgroundColor: isUnlocked
+                ? (dark ? '#1e1b10' : '#fffbeb')
+                : (dark ? '#1e293b' : '#f8fafc'),
+              borderRadius: 14,
+              paddingVertical: 12,
+              paddingHorizontal: 8,
+              borderWidth: 1.5,
+              borderColor: isUnlocked
+                ? levelInfo.color + 'aa'
+                : (dark ? '#334155' : '#e2e8f0'),
+            }}>
+              {/* NEW badge */}
               {isNew && (
-                <View style={styles.trophyBadge}>
-                  <Text style={styles.trophyBadgeText}>NEW!</Text>
+                <View style={{
+                  position: 'absolute', top: -6, right: -6,
+                  backgroundColor: '#ef4444', borderRadius: 8,
+                  paddingHorizontal: 5, paddingVertical: 2, zIndex: 10,
+                }}>
+                  <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 8, color: '#fff' }}>NEW</Text>
                 </View>
               )}
-              <AnimatedTrophyIcon
-                isUnlocked={isUnlocked}
-                icon={trophy.icon}
-              />
-              <Text style={styles.trophyName}>{trophy.name}</Text>
-              <Text style={styles.trophyDescription}>{trophy.description}</Text>
-              {!isUnlocked && (
-                <Text style={styles.trophyProgress}>
-                  {reportsCount}/{trophy.requirement}
+
+              {/* Icon circle */}
+              <View style={{
+                width: 48, height: 48, borderRadius: 24,
+                backgroundColor: isUnlocked
+                  ? levelInfo.color + '28'
+                  : (dark ? '#334155' : '#e2e8f0'),
+                alignItems: 'center', justifyContent: 'center',
+                marginBottom: 7,
+              }}>
+                <Text style={{ fontSize: 22, opacity: isUnlocked ? 1 : 0.3 }}>
+                  {trophy.icon}
                 </Text>
+                {!isUnlocked && (
+                  <View style={{
+                    position: 'absolute', bottom: -2, right: -2,
+                    backgroundColor: dark ? '#475569' : '#94a3b8',
+                    borderRadius: 7, width: 14, height: 14,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 8 }}>🔒</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Name */}
+              <Text
+                numberOfLines={2}
+                style={{
+                  fontFamily: 'Outfit-SemiBold', fontSize: 10,
+                  color: isUnlocked ? c.text : c.textSecondary,
+                  textAlign: 'center', marginBottom: 6, lineHeight: 13,
+                }}
+              >
+                {trophy.name}
+              </Text>
+
+              {/* State indicator */}
+              {isUnlocked ? (
+                <View style={{
+                  backgroundColor: levelInfo.color,
+                  borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2,
+                }}>
+                  <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 9, color: '#fff' }}>âœ“ Earned</Text>
+                </View>
+              ) : (
+                <View style={{ width: '100%' }}>
+                  <View style={{
+                    height: 4, backgroundColor: dark ? '#334155' : '#e2e8f0',
+                    borderRadius: 2, overflow: 'hidden',
+                  }}>
+                    <View style={{
+                      height: 4,
+                      width: `${Math.round(progress * 100)}%`,
+                      backgroundColor: '#3b82f6',
+                      borderRadius: 2,
+                    }} />
+                  </View>
+                  <Text style={{
+                    fontFamily: 'Outfit-Regular', fontSize: 9,
+                    color: c.textSecondary, textAlign: 'center', marginTop: 3,
+                  }}>
+                    {reportsCount}/{trophy.requirement}
+                  </Text>
+                </View>
               )}
             </View>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 };

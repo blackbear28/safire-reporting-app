@@ -33,7 +33,9 @@ import {
   
   ReportProblem,
   Delete,
-  SaveAlt
+  SaveAlt,
+  Lock,
+  VisibilityOff
 } from '@mui/icons-material';
 import { Assignment } from '@mui/icons-material';
 import { 
@@ -296,7 +298,9 @@ export default function ReportsManagement({ userRole }) {
     const cols = ['id','title','status','priority','category','reporterName','createdAt'];
     const csvRows = rows.map(r => {
       const created = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toISOString() : '';
-      return [r.id, (r.title||''), (r.status||''), (r.priority||''), (r.category||''), (r.reporterName||''), created]
+      // Never expose identity for anonymous reports in exports
+      const reporterName = r.anonymous ? 'Anonymous' : (r.reporterName || '');
+      return [r.id, (r.title||''), (r.status||''), (r.priority||''), (r.category||''), reporterName, created]
         .map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
     });
     const csv = [cols.join(',')].concat(csvRows).join('\n');
@@ -525,7 +529,7 @@ export default function ReportsManagement({ userRole }) {
                 {selectedReport.anonymous && (
                   <Box>
                     <Typography variant="overline" color="text.secondary" display="block">Reporter</Typography>
-                    <Chip label="Anonymous" variant="outlined" color="default" sx={{ fontWeight: 500 }} />
+                    <Chip icon={<VisibilityOff fontSize="small" />} label="Anonymous" variant="outlined" color="warning" sx={{ fontWeight: 600 }} />
                   </Box>
                 )}
               </Box>
@@ -541,7 +545,28 @@ export default function ReportsManagement({ userRole }) {
               </Box>
 
               {/* Reporter info */}
-              {!selectedReport.anonymous && (
+              {selectedReport.anonymous ? (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>Reporter</Typography>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 2, borderRadius: 2, bgcolor: 'grey.50', borderColor: 'warning.light', borderStyle: 'dashed' }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Lock sx={{ color: 'text.disabled', fontSize: 28 }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight={700} color="text.secondary">
+                          Anonymous Submission — Reporter identity is protected
+                        </Typography>
+                        <Typography variant="caption" color="text.disabled">
+                          This report was submitted anonymously. No personal information can be viewed by administrators.
+                          Identity records are not stored for anonymous submissions.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Box>
+              ) : (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle2" fontWeight={700} gutterBottom>Reporter</Typography>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
@@ -576,7 +601,7 @@ export default function ReportsManagement({ userRole }) {
                       </Grid>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
-                        {selectedReport.reporterName || selectedReport.userEmail || `User ID: ${selectedReport.userId || 'Unknown'}`}
+                        {selectedReport.reporterName || selectedReport.userEmail || 'Reporter information not available'}
                       </Typography>
                     )}
                   </Paper>

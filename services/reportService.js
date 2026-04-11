@@ -14,7 +14,9 @@ import {
   updateDoc,
   deleteDoc,
   increment,
-  getDoc
+  getDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { supabase, STORAGE_BUCKET } from '../supabase';
@@ -943,6 +945,21 @@ export class ReportService {
       }
     } catch (error) {
       console.error('Error upvoting report:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Me Too / Also Affected by this issue
+  static async meTooReport(reportId, userId, alreadyAffected) {
+    try {
+      const reportRef = doc(db, 'reports', reportId);
+      await updateDoc(reportRef, {
+        affectedCount: alreadyAffected ? increment(-1) : increment(1),
+        affectedByUsers: alreadyAffected ? arrayRemove(userId) : arrayUnion(userId),
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating meToo:', error);
       return { success: false, error: error.message };
     }
   }

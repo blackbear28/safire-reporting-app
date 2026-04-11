@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import * as Font from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -106,6 +106,13 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { usageLogger, FEATURES } from './services/usageLogger';
 import ModerationService from './services/moderationService';
 import ModerationSettingsScreen from './ModerationSettingsScreen';
+import MyReportsScreen from './MyReportsScreen';
+import AppealScreen from './AppealScreen';
+import EmergencyReportScreen from './EmergencyReportScreen';
+import HotspotMapScreen from './HotspotMapScreen';
+import SmartAttendanceScreen from './SmartAttendanceScreen';
+import LostAndFoundScreen from './LostAndFoundScreen';
+import LibraryScreen from './LibraryScreen';
 
 function LoadingModal({ visible, message, showOk, onOk }) {
   return (
@@ -1236,6 +1243,17 @@ export default function App() {
                 <Stack.Screen name="EditProfile" component={EditProfile} />
                 <Stack.Screen name="ModerationSettings" component={ModerationSettingsScreen} />
                 <Stack.Screen name="TestFeedback" component={TestFeedbackScreen} />
+                <Stack.Screen name="MyReports" component={MyReportsScreen} />
+                <Stack.Screen name="Appeal" component={AppealScreen} />
+                <Stack.Screen
+                  name="EmergencyReport"
+                  component={EmergencyReportScreen}
+                  options={{ gestureEnabled: false }}
+                />
+                <Stack.Screen name="HotspotMap" component={HotspotMapScreen} />
+                <Stack.Screen name="SmartAttendance" component={SmartAttendanceScreen} />
+                <Stack.Screen name="LostAndFound" component={LostAndFoundScreen} />
+                <Stack.Screen name="Library" component={LibraryScreen} />
               </Stack.Navigator>
               </AuthUserProvider>
             </NavigationContainer>

@@ -1,4 +1,4 @@
-// Appeal Screen - ISO 21001:2018 Compliant
+﻿// Appeal Screen - ISO 21001:2018 Compliant
 // Allows users to submit appeals for rejected reports
 // Reference: MO-4.16 Handling Complaint's Appeals
 

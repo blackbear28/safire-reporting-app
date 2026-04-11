@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from './contexts/ThemeContext';
@@ -8,7 +8,7 @@ const WELLBEING_TIPS = [
   'Take regular breaks and get enough sleep.',
   'Reach out to friends or family when you feel overwhelmed.',
   'Stay hydrated and eat nutritious meals.',
-  'Remember, it’s okay to ask for help!',
+  'Remember, itâ€™s okay to ask for help!',
   'Practice mindfulness or meditation for a few minutes each day.',
 ];
 
@@ -69,7 +69,7 @@ export default function SupportScreen() {
           <Text style={[styles.sectionTitle, { color: colors?.primary, fontFamily: 'Outfit-Bold' }]}>Motivational Quote</Text>
           <View style={[styles.quoteBox, { backgroundColor: colors?.card }]}> 
             <Text style={[styles.quoteText, { color: colors?.text, fontFamily: 'Outfit-Italic' }]}> 
-              “{quote}”
+              â€œ{quote}â€
             </Text>
           </View>
         </View>
