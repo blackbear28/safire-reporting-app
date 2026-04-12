@@ -646,7 +646,7 @@ const HomeTab = ({
           { label: 'Lost &\nFound',     icon: 'search-outline',           color: '#d97706', screen: 'LostAndFound' },
           { label: 'Counseling',        icon: 'heart-outline',            color: '#16a34a', screen: null },
           { label: 'Library',           icon: 'book-outline',             color: '#db2777', screen: 'Library' },
-          { label: 'Announce-\nments',  icon: 'megaphone-outline',        color: '#7c3aed', screen: null },
+          { label: 'Announce-\nments',  icon: 'megaphone-outline',        color: '#7c3aed', screen: 'Announcements' },
           { label: 'Campus\nEvents',    icon: 'calendar-outline',         color: '#ea580c', screen: null },
           { label: 'Facilities',        icon: 'business-outline',         color: '#0891b2', screen: null },
           { label: 'Health\nServices',  icon: 'medkit-outline',           color: '#dc2626', screen: null },

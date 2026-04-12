@@ -219,5 +219,11 @@ service cloud.firestore {
                        (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
+
+    // Announcements (admin-only create/update/delete)
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

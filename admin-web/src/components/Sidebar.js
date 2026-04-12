@@ -28,6 +28,7 @@ import {
   Flag,
   Event as EventIcon,
   Whatshot as HotspotIcon,
+  Campaign as CampaignIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -42,6 +43,7 @@ const menuItems = [
   { text: 'Users', icon: <PeopleIcon />, path: '/users' },
   { text: 'Appointments', icon: <EventIcon />, path: '/appointments' },
   { text: 'Messages', icon: <ChatIcon />, path: '/messages' },
+  { text: 'Announcements', icon: <CampaignIcon />, path: '/announcements' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   { text: 'Hotspot Map', icon: <HotspotIcon />, path: '/hotspot-map', badge: 'NEW' },
   { text: 'AI Triage', icon: <ShieldIcon />, path: '/moderation-logs', badge: 'AI' },

@@ -23,6 +23,7 @@ import CreateAdminUser from './components/CreateAdminUser';
 import TestFeedbackLogs from './components/TestFeedbackLogs';
 import UsageLogs from './components/UsageLogs';
 import MessagesManagement from './components/MessagesManagement';
+import AnnouncementsManagement from './components/AnnouncementsManagement';
 import ModerationSettings from './components/ModerationSettings';
 import ModerationLogs from './components/ModerationLogs';
 import HotspotMap from './components/HotspotMap';
@@ -369,6 +370,7 @@ function App() {
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
               <Route path="/appointments" element={<AppointmentsManagement />} />
               <Route path="/messages" element={<MessagesManagement userRole={userRole} />} />
+              <Route path="/announcements" element={<AnnouncementsManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
               <Route path="/moderation" element={<ModerationSettings userRole={userRole} />} />
               <Route path="/moderation-logs" element={<ModerationLogs userRole={userRole} />} />

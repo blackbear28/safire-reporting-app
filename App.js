@@ -114,6 +114,7 @@ import HotspotMapScreen from './HotspotMapScreen';
 import SmartAttendanceScreen from './SmartAttendanceScreen';
 import LostAndFoundScreen from './LostAndFoundScreen';
 import LibraryScreen from './LibraryScreen';
+import AnnouncementsScreen from './AnnouncementsScreen';
 
 function LoadingModal({ visible, message, showOk, onOk }) {
   return (
@@ -499,6 +500,7 @@ function AccountSetupScreen({ navigation, route }) {
 function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [usePasswordMode, setUsePasswordMode] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [verificationUrl, setVerificationUrl] = useState('');
@@ -950,19 +952,36 @@ function LoginScreen({ navigation }) {
       {/* Password Input (only in password mode) */}
       {usePasswordMode && !emailSent && (
         <>
-          <TextInput
-            style={styles.input}
-            placeholder="Password (min 6 characters)"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordInputContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password (min 6 characters)"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
 
-          <TouchableOpacity onPress={handlePasswordReset} style={{ marginTop: -6, alignSelf: 'flex-end', marginRight: 40 }}>
-            <Text style={styles.switchText}>Forgot password?</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowPassword((prev) => !prev)}
+              style={styles.passwordToggle}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            >
+              <FontAwesome
+                name={showPassword ? 'eye-slash' : 'eye'}
+                size={18}
+                color="#2667ff"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.forgotPasswordRow}>
+            <TouchableOpacity onPress={handlePasswordReset} accessibilityRole="button">
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
+          </View>
         </>
       )}
       
@@ -1352,6 +1371,7 @@ export default function App() {
                 <Stack.Screen name="SmartAttendance" component={SmartAttendanceScreen} />
                 <Stack.Screen name="LostAndFound" component={LostAndFoundScreen} />
                 <Stack.Screen name="Library" component={LibraryScreen} />
+                <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
               </Stack.Navigator>
               </AuthUserProvider>
             </NavigationContainer>
@@ -1435,6 +1455,45 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     alignSelf: 'center',
     fontFamily: 'Outfit-Regular',
+  },
+  passwordInputContainer: {
+    height: 50,
+    borderColor: '#e6ecf0',
+    borderWidth: 1,
+    borderRadius: 15,
+    marginBottom: 6,
+    backgroundColor: '#fff',
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 20,
+    fontSize: 15,
+    fontFamily: 'Outfit-Regular',
+    color: '#222',
+  },
+  passwordToggle: {
+    height: '100%',
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  forgotPasswordRow: {
+    width: '80%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  forgotPasswordText: {
+    color: '#2667ff',
+    fontSize: 14,
+    fontFamily: 'Outfit-Bold',
   },
   nextButton: {
     backgroundColor: '#222',
