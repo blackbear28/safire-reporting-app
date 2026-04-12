@@ -24,6 +24,7 @@ import {
   onAuthStateChanged,
   signOut,
   getAuth,
+  sendPasswordResetEmail,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -555,6 +556,49 @@ function LoginScreen({ navigation }) {
     return emailAddress.toLowerCase().endsWith(SCHOOL_EMAIL_DOMAIN);
   };
 
+  const handlePasswordReset = async () => {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      Alert.alert('Reset Password', 'Please enter your email address first.');
+      return;
+    }
+
+    if (!validateSchoolEmail(normalizedEmail)) {
+      Alert.alert('Reset Password', `Please use your Cor Jesu College email address (${SCHOOL_EMAIL_DOMAIN})`);
+      return;
+    }
+
+    setLoading(true);
+    setLoadingMessage('Sending password reset email...');
+
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      setLoading(false);
+      Alert.alert(
+        'Check your email',
+        'If this account uses password sign-in, a reset link has been sent.\n\nIf you originally used Email Link sign-in, switch to Email Link mode instead.',
+        [
+          { text: 'Use Email Link', onPress: () => setUsePasswordMode(false) },
+          { text: 'OK' }
+        ]
+      );
+    } catch (error) {
+      setLoading(false);
+      console.error('Password reset error:', error);
+
+      if (error.code === 'auth/invalid-email') {
+        Alert.alert('Reset Password', 'Invalid email address.');
+      } else if (error.code === 'auth/too-many-requests') {
+        Alert.alert('Reset Password', 'Too many requests. Please wait a bit and try again.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        Alert.alert('Reset Password', 'Password sign-in is disabled for this project. Enable Email/Password in Firebase Auth.');
+      } else {
+        Alert.alert('Reset Password', error.message);
+      }
+    }
+  };
+
   const handleVerifyLink = async () => {
     if (!verificationUrl || !verificationUrl.trim()) {
       alert('Please paste the verification link from your email');
@@ -635,7 +679,9 @@ function LoginScreen({ navigation }) {
       return;
     }
 
-    if (!validateSchoolEmail(email)) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!validateSchoolEmail(normalizedEmail)) {
       alert(`Please use your Cor Jesu College email address (${SCHOOL_EMAIL_DOMAIN})`);
       return;
     }
@@ -646,82 +692,128 @@ function LoginScreen({ navigation }) {
     }
 
     setLoading(true);
-    setLoadingMessage('Authenticating...');
+    setLoadingMessage('Signing you in...');
 
     try {
-      // Try to sign in first
-      setLoadingMessage('Signing you in...');
+      // 1) Sign in first (existing users)
       let userCredential;
-      
       try {
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-        
-        // Check if suspended
-        const userDocRef = doc(db, 'users', userCredential.user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        const userData = userDocSnap.data();
-        
-        if (userData?.accountStatus === 'suspended' || userData?.status === 'suspended') {
-          await signOut(auth);
-          alert(`Account suspended: ${userData.suspensionReason || 'Your account has been suspended.'}`);
-          setLoading(false);
-          return;
-        }
-
-        // Save login time for session tracking
-        await AsyncStorage.setItem('sessionStartTime', Date.now().toString());
-        
-        // Initialize usage logger for testing
-        const testCode = `USER_${userCredential.user.uid.substring(0, 8)}_${Date.now()}`;
-        await usageLogger.initSession(testCode, userCredential.user.uid, email, 'User');
-        await usageLogger.startFeature(FEATURES.LOGIN);
-        
-        setLoadingMessage('Welcome back! 🎉');
-        setTimeout(() => {
-          setLoading(false);
-          navigation.replace('Home');
-        }, 1000);
-        
+        userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       } catch (signInError) {
-        // If user doesn't exist, create new account
-        // Firebase uses 'auth/invalid-credential' for both wrong password AND non-existent users (security feature)
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          setLoadingMessage('Creating your account...');
-          userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          
-          // Create user profile
-          await setDoc(doc(db, 'users', userCredential.user.uid), {
-            email: userCredential.user.email,
-            createdAt: new Date(),
-            accountStatus: 'active',
-            school: 'Cor Jesu College',
-            verifiedStudent: true
-          });
-
-          // Initialize usage logger for new user
-          const testCode = `USER_${userCredential.user.uid.substring(0, 8)}_${Date.now()}`;
-          await usageLogger.initSession(testCode, userCredential.user.uid, email, 'User');
-          await usageLogger.startFeature(FEATURES.LOGIN);
-
-          setLoadingMessage('Account created! 🎓');
-          setTimeout(() => {
-            setLoading(false);
-            navigation.replace('AccountSetup', { email: userCredential.user.email });
-          }, 1000);
-        } else {
+        // If sign-in fails for reasons where creating an account doesn't make sense, surface it.
+        if (signInError?.code === 'auth/invalid-email') {
           throw signInError;
         }
+        if (signInError?.code === 'auth/user-disabled') {
+          throw signInError;
+        }
+        if (signInError?.code === 'auth/too-many-requests') {
+          throw signInError;
+        }
+        if (signInError?.code === 'auth/network-request-failed') {
+          throw signInError;
+        }
+        if (signInError?.code === 'auth/operation-not-allowed') {
+          throw signInError;
+        }
+
+        // 2) If sign-in fails (wrong password OR user doesn't exist), attempt to create.
+        // If the email already exists, we know the user is real and the password/method is the issue.
+        setLoadingMessage('Creating your account...');
+        try {
+          userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+        } catch (createError) {
+          if (createError?.code === 'auth/email-already-in-use') {
+            setLoading(false);
+
+            // Optional hint: if the account exists but doesn't support password sign-in, guide to Email Link.
+            let hint = 'This email already has an account. Check your password, reset it, or use Email Link sign-in.';
+            try {
+              const methods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
+              if (methods.length > 0 && !methods.includes('password')) {
+                hint = 'This email is registered, but it does not have password sign-in set up. Use Email Link sign-in instead.';
+              }
+            } catch (_) {
+              // Enumeration protection or network issues can cause this to fail.
+            }
+
+            Alert.alert(
+              'Sign-in failed',
+              hint,
+              [
+                { text: 'Reset Password', onPress: handlePasswordReset },
+                { text: 'Use Email Link', onPress: () => setUsePasswordMode(false) },
+                { text: 'OK', style: 'cancel' }
+              ]
+            );
+            return;
+          }
+          throw createError;
+        }
+
+        // New user created: create Firestore profile and route to setup.
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          email: userCredential.user.email,
+          createdAt: new Date(),
+          accountStatus: 'active',
+          school: 'Cor Jesu College',
+          verifiedStudent: true
+        });
+
+        // Initialize usage logger for new user
+        const newUserTestCode = `USER_${userCredential.user.uid.substring(0, 8)}_${Date.now()}`;
+        await usageLogger.initSession(newUserTestCode, userCredential.user.uid, normalizedEmail, 'User');
+        await usageLogger.startFeature(FEATURES.LOGIN);
+
+        setLoadingMessage('Account created! 🎓');
+        setTimeout(() => {
+          setLoading(false);
+          navigation.replace('AccountSetup', { email: userCredential.user.email });
+        }, 1000);
+        return;
       }
+
+      // Check if suspended
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      const userData = userDocSnap.data();
+
+      if (userData?.accountStatus === 'suspended' || userData?.status === 'suspended') {
+        await signOut(auth);
+        alert(`Account suspended: ${userData.suspensionReason || 'Your account has been suspended.'}`);
+        setLoading(false);
+        return;
+      }
+
+      // Save login time for session tracking
+      await AsyncStorage.setItem('sessionStartTime', Date.now().toString());
+
+      // Initialize usage logger for testing
+      const testCode = `USER_${userCredential.user.uid.substring(0, 8)}_${Date.now()}`;
+      await usageLogger.initSession(testCode, userCredential.user.uid, normalizedEmail, 'User');
+      await usageLogger.startFeature(FEATURES.LOGIN);
+
+      setLoadingMessage('Welcome back! 🎉');
+      setTimeout(() => {
+        setLoading(false);
+        navigation.replace('Home');
+      }, 1000);
     } catch (error) {
       setLoading(false);
       console.error('Password auth error:', error);
       
-      if (error.code === 'auth/wrong-password') {
-        alert('Incorrect password. Please try again.');
-      } else if (error.code === 'auth/email-already-in-use') {
-        alert('This email is already registered. Please sign in instead.');
-      } else if (error.code === 'auth/invalid-email') {
+      if (error.code === 'auth/invalid-email') {
         alert('Invalid email address.');
+      } else if (error.code === 'auth/user-disabled') {
+        alert('This account has been disabled. Please contact support.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        alert('Password sign-in is disabled for this project. Enable Email/Password in Firebase Auth.');
+      } else if (error.code === 'auth/network-request-failed') {
+        alert('Network error. Please check your internet connection and try again.');
+      } else if (error.code === 'auth/too-many-requests') {
+        alert('Too many attempts. Please wait a bit and try again.');
+      } else if (error.code === 'auth/weak-password') {
+        alert('Password is too weak. Please use at least 6 characters.');
       } else {
         alert(`Authentication failed: ${error.message}`);
       }
@@ -857,15 +949,21 @@ function LoginScreen({ navigation }) {
       
       {/* Password Input (only in password mode) */}
       {usePasswordMode && !emailSent && (
-        <TextInput
-          style={styles.input}
-          placeholder="Password (min 6 characters)"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+        <>
+          <TextInput
+            style={styles.input}
+            placeholder="Password (min 6 characters)"
+            placeholderTextColor="#999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+
+          <TouchableOpacity onPress={handlePasswordReset} style={{ marginTop: -6, alignSelf: 'flex-end', marginRight: 40 }}>
+            <Text style={styles.switchText}>Forgot password?</Text>
+          </TouchableOpacity>
+        </>
       )}
       
       {/* Main Action Button */}
