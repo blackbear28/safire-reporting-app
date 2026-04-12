@@ -488,6 +488,7 @@ const HomeTab = ({
 }) => (
   <View style={[styles.homeTabContainer, { backgroundColor: colors.background }]}>
     <ScrollView 
+      style={{ flex: 1 }}
       contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
