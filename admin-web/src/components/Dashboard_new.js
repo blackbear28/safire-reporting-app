@@ -9,6 +9,7 @@ import {
   Button,
   IconButton,
   Chip,
+  LinearProgress,
 } from '@mui/material';
 import {
   Report as ReportIcon,
@@ -16,10 +17,12 @@ import {
   Chat as ChatIcon,
   BarChart as BarChartIcon,
   ArrowForward as ArrowForwardIcon,
-  
   Security as SecurityIcon,
   TrendingUp as TrendingIcon,
   Verified as VerifiedIcon,
+  Shield as ShieldIcon,
+  Warning as WarningIcon,
+  CheckCircle as ClearedIcon,
 } from '@mui/icons-material';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -34,6 +37,9 @@ export default function Dashboard({ userRole }) {
     totalUsers: 0,
     todayReports: 0
   });
+  const [aiStats, setAiStats] = useState({
+    highRisk: 0, needsReview: 0, cleared: 0, notAnalyzed: 0, total: 0,
+  });
 
   useEffect(() => {
     const unsubscribeReports = onSnapshot(
@@ -43,6 +49,7 @@ export default function Dashboard({ userRole }) {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+        // General stats
         setStats(prev => ({
           ...prev,
           totalReports: reports.length,
@@ -53,6 +60,16 @@ export default function Dashboard({ userRole }) {
             return reportDate && reportDate >= today;
           }).length,
         }));
+
+        // AI triage stats
+        const active = reports.filter(r => r.status !== 'resolved' && r.status !== 'rejected');
+        setAiStats({
+          total: active.length,
+          highRisk: active.filter(r => r.aiRiskLevel === 'high').length,
+          needsReview: active.filter(r => r.aiRiskLevel === 'medium').length,
+          cleared: active.filter(r => r.aiRiskLevel === 'low').length,
+          notAnalyzed: active.filter(r => !r.aiTriage).length,
+        });
       }
     );
 
@@ -302,6 +319,56 @@ export default function Dashboard({ userRole }) {
           />
         </Grid>
       </Grid>
+
+      {/* AI Triage Panel */}
+      <Box sx={{ mb: 5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShieldIcon sx={{ color: '#1a73e8', fontSize: 20 }} />
+            <Typography variant="h6" fontWeight={600} color="#202124">AI Triage Overview</Typography>
+            <Chip label="Live" size="small" color="success" sx={{ height: 18, fontSize: '0.65rem' }} />
+          </Box>
+          <Button size="small" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/moderation-logs')}
+            sx={{ textTransform: 'none', fontSize: '0.8125rem', color: '#1a73e8' }}>
+            Open AI Triage Center
+          </Button>
+        </Box>
+        <Grid container spacing={2}>
+          {[
+            { label: 'High Risk', value: aiStats.highRisk, color: '#ea4335', bg: '#fce8e6', icon: <WarningIcon />, pct: aiStats.total ? Math.round((aiStats.highRisk / aiStats.total) * 100) : 0 },
+            { label: 'Needs Review', value: aiStats.needsReview, color: '#f9ab00', bg: '#fef9e7', icon: <WarningIcon />, pct: aiStats.total ? Math.round((aiStats.needsReview / aiStats.total) * 100) : 0 },
+            { label: 'Cleared by AI', value: aiStats.cleared, color: '#34a853', bg: '#e6f4ea', icon: <ClearedIcon />, pct: aiStats.total ? Math.round((aiStats.cleared / aiStats.total) * 100) : 0 },
+            { label: 'Not Analyzed', value: aiStats.notAnalyzed, color: '#5f6368', bg: '#f1f3f4', icon: <SecurityIcon />, pct: aiStats.total ? Math.round((aiStats.notAnalyzed / aiStats.total) * 100) : 0 },
+          ].map(s => (
+            <Grid item xs={6} md={3} key={s.label}>
+              <Card elevation={0} sx={{ border: `1px solid ${s.color}40`, borderRadius: 3, bgcolor: s.bg, cursor: 'pointer', '&:hover': { boxShadow: 2 } }}
+                onClick={() => navigate('/moderation-logs')}>
+                <CardContent sx={{ p: 2, pb: '12px !important' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    {React.cloneElement(s.icon, { sx: { color: s.color, fontSize: 18 } })}
+                    <Typography variant="caption" fontWeight={600} color={s.color}>{s.label}</Typography>
+                  </Box>
+                  <Typography variant="h4" fontWeight={700} color={s.color} lineHeight={1}>{s.value}</Typography>
+                  <LinearProgress variant="determinate" value={s.pct}
+                    sx={{ mt: 1, height: 4, borderRadius: 2, bgcolor: `${s.color}20`, '& .MuiLinearProgress-bar': { bgcolor: s.color } }} />
+                  <Typography variant="caption" color={s.color} sx={{ opacity: 0.8 }}>{s.pct}% of active reports</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+        {aiStats.notAnalyzed > 0 && (
+          <Box sx={{ mt: 1.5, p: 1.5, bgcolor: '#fef9e7', borderRadius: 2, border: '1px solid #f9ab0040', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="body2" color="#ea8600">
+              <strong>{aiStats.notAnalyzed}</strong> active report{aiStats.notAnalyzed !== 1 ? 's' : ''} have not been AI-triaged yet.
+            </Typography>
+            <Button size="small" variant="contained" onClick={() => navigate('/moderation-logs')}
+              sx={{ bgcolor: '#f9ab00', color: '#fff', '&:hover': { bgcolor: '#ea8600' }, textTransform: 'none', fontSize: '0.8125rem' }}>
+              Go to AI Triage Center
+            </Button>
+          </Box>
+        )}
+      </Box>
 
       {/* What's New Section */}
       <Box sx={{ mb: 5 }}>

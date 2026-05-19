@@ -18,166 +18,255 @@ import Analytics from './components/Analytics';
 import AppointmentsManagement from './components/AppointmentsManagement';
 import Settings from './components/Settings';
 import LoadingSpinner from './components/LoadingSpinner';
+
 import CreateAdminUser from './components/CreateAdminUser';
 import TestFeedbackLogs from './components/TestFeedbackLogs';
 import UsageLogs from './components/UsageLogs';
 import MessagesManagement from './components/MessagesManagement';
+import AnnouncementsManagement from './components/AnnouncementsManagement';
 import ModerationSettings from './components/ModerationSettings';
 import ModerationLogs from './components/ModerationLogs';
+import HotspotMap from './components/HotspotMap';
+import TopBar from './components/TopBar';
 
-// Theme configuration - Google Cloud Console inspired
+// Theme — Poppins / modern professional
 const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1a73e8', // Google Blue
-      dark: '#1557b0',
-      light: '#4285f4',
+      main: '#4f6ef7',
+      dark: '#3451d1',
+      light: '#7b93fb',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#ea4335', // Google Red
-      light: '#ff6659',
-      dark: '#c5221f',
+      main: '#f04f5a',
+      light: '#ff7d87',
+      dark: '#c0202e',
     },
     success: {
-      main: '#34a853', // Google Green
-      light: '#57bb7e',
-      dark: '#0d9e3b',
+      main: '#22c55e',
+      light: '#4ade80',
+      dark: '#15803d',
     },
     warning: {
-      main: '#fbbc04', // Google Yellow
-      light: '#fdd663',
-      dark: '#f9ab00',
+      main: '#f59e0b',
+      light: '#fbbf24',
+      dark: '#d97706',
+    },
+    info: {
+      main: '#06b6d4',
+      light: '#22d3ee',
+      dark: '#0891b2',
+    },
+    error: {
+      main: '#ef4444',
+      light: '#f87171',
+      dark: '#dc2626',
     },
     background: {
-      default: '#f8f9fa',
+      default: '#f4f6fb',
       paper: '#ffffff',
     },
     text: {
-      primary: '#202124',
-      secondary: '#5f6368',
+      primary: '#1e2230',
+      secondary: '#64748b',
     },
-    divider: '#e8eaed',
+    divider: '#e8edf5',
+    grey: {
+      50:  '#f8fafc',
+      100: '#f1f5f9',
+      200: '#e2e8f0',
+      300: '#cbd5e1',
+      400: '#94a3b8',
+      500: '#64748b',
+      600: '#475569',
+      700: '#334155',
+      800: '#1e293b',
+      900: '#0f172a',
+    },
   },
   typography: {
-    fontFamily: '"Outfit", "Google Sans", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontSize: '2.125rem',
-      fontWeight: 600,
-      letterSpacing: '-0.01562em',
-      color: '#202124',
-    },
-    h2: {
-      fontSize: '1.75rem',
-      fontWeight: 600,
-      letterSpacing: '-0.00833em',
-      color: '#202124',
-    },
-    h3: {
-      fontSize: '1.5rem',
-      fontWeight: 600,
-      letterSpacing: '0em',
-      color: '#202124',
-    },
-    h4: {
-      fontSize: '1.25rem',
-      fontWeight: 600,
-      letterSpacing: '0.0075em',
-      color: '#202124',
-    },
-    h5: {
-      fontSize: '1.125rem',
-      fontWeight: 600,
-      letterSpacing: '0em',
-      color: '#202124',
-    },
-    h6: {
-      fontSize: '1rem',
-      fontWeight: 600,
-      letterSpacing: '0.0125em',
-      color: '#202124',
-    },
-    subtitle1: {
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      letterSpacing: '0.00714em',
-      color: '#5f6368',
-    },
-    body1: {
-      fontSize: '0.875rem',
-      fontWeight: 400,
-      letterSpacing: '0.01071em',
-      color: '#202124',
-    },
-    body2: {
-      fontSize: '0.8125rem',
-      fontWeight: 400,
-      letterSpacing: '0.01071em',
-      color: '#5f6368',
-    },
-    button: {
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      letterSpacing: '0.0892857143em',
-      textTransform: 'none',
-    },
+    fontFamily: '"Poppins", "Inter", "Helvetica Neue", "Arial", sans-serif',
+    h1: { fontSize: '2rem',     fontWeight: 700, letterSpacing: '-0.02em' },
+    h2: { fontSize: '1.75rem',  fontWeight: 700, letterSpacing: '-0.015em' },
+    h3: { fontSize: '1.5rem',   fontWeight: 600, letterSpacing: '-0.01em' },
+    h4: { fontSize: '1.25rem',  fontWeight: 600, letterSpacing: '-0.005em' },
+    h5: { fontSize: '1.1rem',   fontWeight: 600, letterSpacing: '0' },
+    h6: { fontSize: '0.95rem',  fontWeight: 600, letterSpacing: '0' },
+    subtitle1: { fontSize: '0.875rem', fontWeight: 500, color: '#64748b' },
+    subtitle2: { fontSize: '0.8rem',   fontWeight: 500, color: '#64748b' },
+    body1:     { fontSize: '0.875rem', fontWeight: 400, lineHeight: 1.6 },
+    body2:     { fontSize: '0.8125rem',fontWeight: 400, lineHeight: 1.55, color: '#64748b' },
+    caption:   { fontSize: '0.75rem',  fontWeight: 400, color: '#94a3b8' },
+    overline:  { fontSize: '0.7rem',   fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' },
+    button:    { fontSize: '0.875rem', fontWeight: 500, textTransform: 'none', letterSpacing: '0.01em' },
   },
-  shape: {
-    borderRadius: 8,
-  },
+  shape: { borderRadius: 12 },
   shadows: [
     'none',
-    '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
-    '0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15)',
-    '0 4px 8px 3px rgba(60,64,67,.15), 0 1px 3px 0 rgba(60,64,67,.3)',
-    '0 6px 10px 4px rgba(60,64,67,.15), 0 2px 3px 0 rgba(60,64,67,.3)',
-    '0 8px 12px 6px rgba(60,64,67,.15), 0 4px 4px 0 rgba(60,64,67,.3)',
-    ...Array(19).fill('0 8px 12px 6px rgba(60,64,67,.15), 0 4px 4px 0 rgba(60,64,67,.3)'),
+    '0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04)',
+    '0 2px 6px rgba(15,23,42,.07), 0 1px 3px rgba(15,23,42,.04)',
+    '0 4px 12px rgba(15,23,42,.08), 0 2px 4px rgba(15,23,42,.04)',
+    '0 6px 16px rgba(15,23,42,.09), 0 2px 6px rgba(15,23,42,.05)',
+    '0 8px 24px rgba(15,23,42,.10), 0 4px 8px rgba(15,23,42,.05)',
+    '0 12px 32px rgba(15,23,42,.11), 0 4px 10px rgba(15,23,42,.06)',
+    ...Array(18).fill('0 12px 32px rgba(15,23,42,.11), 0 4px 10px rgba(15,23,42,.06)'),
   ],
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: { fontFamily: '"Poppins", "Inter", "Helvetica Neue", Arial, sans-serif' },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 4,
+          borderRadius: 10,
           textTransform: 'none',
           fontWeight: 500,
-          padding: '6px 16px',
+          fontSize: '0.875rem',
+          padding: '7px 18px',
+          transition: 'all .18s ease',
         },
         contained: {
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
-          },
+          boxShadow: '0 2px 8px rgba(79,110,247,.25)',
+          '&:hover': { boxShadow: '0 4px 16px rgba(79,110,247,.35)', transform: 'translateY(-1px)' },
+          '&:active': { transform: 'none', boxShadow: 'none' },
         },
+        outlined: {
+          borderWidth: '1.5px',
+          '&:hover': { borderWidth: '1.5px', backgroundColor: 'rgba(79,110,247,.04)' },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: { borderRadius: 10, transition: 'all .15s ease' },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          border: '1px solid #e8eaed',
-          boxShadow: 'none',
+          borderRadius: 16,
+          border: '1px solid #e8edf5',
+          boxShadow: '0 1px 3px rgba(15,23,42,.06)',
+          transition: 'box-shadow .2s ease',
         },
       },
     },
     MuiPaper: {
       styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
-        elevation1: {
-          boxShadow: '0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15)',
-        },
+        root: { backgroundImage: 'none' },
+        rounded: { borderRadius: 16 },
+        elevation1: { boxShadow: '0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04)' },
+        elevation2: { boxShadow: '0 2px 6px rgba(15,23,42,.07), 0 1px 3px rgba(15,23,42,.04)' },
+        elevation3: { boxShadow: '0 4px 12px rgba(15,23,42,.08), 0 2px 4px rgba(15,23,42,.04)' },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: 'none',
-          borderBottom: '1px solid #e8eaed',
+          boxShadow: '0 1px 0 #e8edf5',
+          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(255,255,255,0.92)',
+          color: '#1e2230',
         },
       },
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          borderRight: '1px solid #e8edf5',
+          boxShadow: 'none',
+        },
+      },
+    },
+    MuiTableHead: {
+      styleOverrides: {
+        root: {
+          '& .MuiTableCell-head': {
+            backgroundColor: '#f8fafc',
+            fontWeight: 600,
+            fontSize: '0.72rem',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: '#64748b',
+            borderBottom: '2px solid #e8edf5',
+          },
+        },
+      },
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: {
+          '&:hover': { backgroundColor: '#f8fafc' },
+          transition: 'background-color .12s',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: { borderBottom: '1px solid #f1f5f9', padding: '10px 16px' },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: { fontWeight: 500, fontSize: '0.75rem', borderRadius: 8 },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 10,
+            '& fieldset': { borderColor: '#e2e8f0', borderWidth: '1.5px' },
+            '&:hover fieldset': { borderColor: '#94a3b8' },
+            '&.Mui-focused fieldset': { borderColor: '#4f6ef7', borderWidth: '2px' },
+          },
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        outlined: { borderRadius: 10 },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: { borderRadius: 20, boxShadow: '0 20px 60px rgba(15,23,42,.18)' },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: { borderRadius: 12, fontSize: '0.855rem' },
+      },
+    },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: { borderRadius: 99, height: 6, backgroundColor: '#e8edf5' },
+        bar:  { borderRadius: 99 },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          backgroundColor: '#1e2230',
+          fontSize: '0.75rem',
+          fontFamily: '"Poppins", sans-serif',
+          borderRadius: 8,
+          padding: '6px 12px',
+        },
+        arrow: { color: '#1e2230' },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: { fontWeight: 500, textTransform: 'none', fontSize: '0.875rem' },
+      },
+    },
+    MuiSnackbar: {
+      defaultProps: { anchorOrigin: { vertical: 'bottom', horizontal: 'right' } },
     },
   },
 });
@@ -253,6 +342,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
+        <TopBar user={user} onSidebarToggle={toggleSidebar} />
         <Box sx={{ display: 'flex' }}>
           <Sidebar 
             open={sidebarOpen} 
@@ -264,6 +354,7 @@ function App() {
             sx={{
               flexGrow: 1,
               p: 3,
+              pt: 10, // Add top padding for AppBar
               transition: theme.transitions.create('margin', {
                 easing: theme.transitions.easing.sharp,
                 duration: theme.transitions.duration.leavingScreen,
@@ -279,11 +370,13 @@ function App() {
               <Route path="/users" element={<UsersManagement userRole={userRole} />} />
               <Route path="/appointments" element={<AppointmentsManagement />} />
               <Route path="/messages" element={<MessagesManagement userRole={userRole} />} />
+              <Route path="/announcements" element={<AnnouncementsManagement userRole={userRole} />} />
               <Route path="/analytics" element={<Analytics userRole={userRole} />} />
               <Route path="/moderation" element={<ModerationSettings userRole={userRole} />} />
               <Route path="/moderation-logs" element={<ModerationLogs userRole={userRole} />} />
               <Route path="/test-feedback" element={<TestFeedbackLogs userRole={userRole} />} />
               <Route path="/usage-logs" element={<UsageLogs />} />
+              <Route path="/hotspot-map" element={<HotspotMap />} />
               <Route path="/settings" element={<Settings userRole={userRole} />} />
               <Route path="/create-admin" element={<CreateAdminUser />} />
             </Routes>

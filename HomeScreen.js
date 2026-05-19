@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -33,6 +33,7 @@ import { usageLogger, FEATURES } from './services/usageLogger';
 import { fetchSchoolNews, formatNewsDate, getCategoryColor } from './services/newsService';
 import { fetchRealCJCNews, getOptimizedImageUrl } from './services/webScrapingService';
 import { ProgressiveImage, useLazyLoading, preloadImages } from './components/ProgressiveImage';
+import { LinearGradient } from 'expo-linear-gradient';
 import FastImage from './components/FastImage';
 import { TrophyDisplay } from './components/TrophySystem';
 import CampusNavigatorScreen from './CampusNavigatorScreen';
@@ -109,11 +110,11 @@ const FontSizes = {
 const getPriorityIcon = (priority) => {
   const icons = {
     critical: 'alert-circle',
-    high: 'warning',
-    medium: 'remove-circle-outline',
+    high: 'alert-circle-outline',
+    medium: 'ellipse-outline',
     low: 'checkmark-circle-outline'
   };
-  return icons[priority] || 'remove-circle-outline';
+  return icons[priority] || 'ellipse-outline';
 };
 
 // Helper function to get color intensity based on count
@@ -173,7 +174,9 @@ const FeedItem = React.memo(({
   userUpvotes,
   userData,
   handleDeletePost,
-  navigation
+  navigation,
+  handleMeToo,
+  userAffected,
 }) => {
   // Debug: Log the first item to check if authorRole is present
   React.useEffect(() => {
@@ -247,7 +250,7 @@ const FeedItem = React.memo(({
                   return 'user';
                 })()}
               </Text>
-              <Text style={[styles.tweetTime, { color: colors.textSecondary }]}>· {String(timeAgo || 'now')}</Text>
+              <Text style={[styles.tweetTime, { color: colors.textSecondary }]}>Â· {String(timeAgo || 'now')}</Text>
             </View>
           </View>
           <View style={[styles.tweetStatusBadge, { backgroundColor: getStatusColor(item.status) }]}>
@@ -374,6 +377,22 @@ const FeedItem = React.memo(({
             <Ionicons name="eye-outline" size={18} color="#8E8E93" />
             <Text style={styles.tweetActionText}>{String(item.viewCount || 0)}</Text>
           </View>
+
+          {!item.anonymous && userData?.uid !== item.authorId && (
+            <TouchableOpacity
+              style={styles.tweetActionBtn}
+              onPress={() => handleMeToo && handleMeToo(item.id)}
+            >
+              <Ionicons
+                name={userAffected?.[item.id] ? 'hand-right' : 'hand-right-outline'}
+                size={18}
+                color={userAffected?.[item.id] ? '#ff9500' : '#8E8E93'}
+              />
+              <Text style={[styles.tweetActionText, userAffected?.[item.id] && { color: '#ff9500' }]}>
+                {String(item.affectedCount || 0)}
+              </Text>
+            </TouchableOpacity>
+          )}
           
           {userData?.uid === item.authorId && (() => {
             const now = new Date();
@@ -426,7 +445,9 @@ const FeedItem = React.memo(({
   // Custom comparison - only re-render if these props change
   return prevProps.item.id === nextProps.item.id &&
          prevProps.item.upvotes === nextProps.item.upvotes &&
+         prevProps.item.affectedCount === nextProps.item.affectedCount &&
          prevProps.userUpvotes[prevProps.item.id] === nextProps.userUpvotes[nextProps.item.id] &&
+         (prevProps.userAffected?.[prevProps.item.id]) === (nextProps.userAffected?.[nextProps.item.id]) &&
          prevProps.colors === nextProps.colors;
 });
 
@@ -453,6 +474,8 @@ const HomeTab = ({
   handleUpvote, 
   userData, 
   handleDeletePost,
+  handleMeToo,
+  userAffected,
   searchQuery,
   setSearchQuery,
   selectedBuilding,
@@ -460,10 +483,12 @@ const HomeTab = ({
   buildings,
   filteredFeed,
   navigation,
-  colors
+  colors,
+  setIndex,
 }) => (
   <View style={[styles.homeTabContainer, { backgroundColor: colors.background }]}>
     <ScrollView 
+      style={{ flex: 1 }}
       contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
@@ -487,6 +512,327 @@ const HomeTab = ({
         />
       }
     >
+
+    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        HERO BANNER CARD â€” GCash-style greeting + CTA
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    <LinearGradient
+      colors={['#1338be', '#2667ff', '#0ea5e9']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        paddingTop: 20,
+        paddingBottom: 28,
+        paddingHorizontal: 20,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Decorative glow circles */}
+      <View style={{ position: 'absolute', top: -30, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: '#ffffff0d' }} />
+      <View style={{ position: 'absolute', bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: '#0ea5e915' }} />
+      <View style={{ position: 'absolute', top: 10, right: 80, width: 60, height: 60, borderRadius: 30, backgroundColor: '#ffffff08' }} />
+      {/* Top row: greeting + safety pulse */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#ffffffaa', letterSpacing: 0.5 }}>
+            Good day,
+          </Text>
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 20, color: '#fff', marginTop: 1 }} numberOfLines={1}>
+            {userData?.name?.split(' ')[0] || 'Hello!'} 👋
+          </Text>
+        </View>
+        {/* Safety status pill */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#ffffff20',
+          borderRadius: 20,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 6 }} />
+          <Text style={{ fontFamily: 'Outfit-SemiBold', fontSize: 11, color: '#fff' }}>Campus Safe</Text>
+        </View>
+      </View>
+
+      {/* CTA card */}
+      <View style={{
+        backgroundColor: '#ffffff18',
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+      }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 14, color: '#fff', marginBottom: 4 }}>
+            See something? Report it.
+          </Text>
+          <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 11, color: '#ffffffbb' }}>
+            Anonymous, fast, and secure reporting
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Report')}
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 22,
+            paddingHorizontal: 16,
+            paddingVertical: 9,
+            marginLeft: 12,
+          }}
+        >
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 12, color: '#2667ff' }}>Report Now</Text>
+        </TouchableOpacity>
+      </View>
+    </LinearGradient>
+
+    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        QUICK ACTIONS GRID â€” 2 Ã— 4 like GCash
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    <View style={{ backgroundColor: colors.surface, paddingVertical: 20, paddingHorizontal: 8 }}>
+      {[
+        [
+          { label: 'File Report',  icon: 'create-outline',           color: '#2667ff', onPress: () => navigation.navigate('Report') },
+          { label: 'Emergency',    icon: 'alert-circle-outline',     color: '#ef4444', onPress: () => navigation.navigate('EmergencyReport') },
+          { label: 'My Reports',   icon: 'reader-outline',           color: '#8b5cf6', onPress: () => navigation.navigate('MyReports') },
+          { label: 'Hotspot Map',  icon: 'location-outline',         color: '#f59e0b', onPress: () => navigation.navigate('HotspotMap') },
+        ],
+        [
+          { label: 'Appeal',       icon: 'ribbon-outline',           color: '#06b6d4', onPress: () => navigation.navigate('Appeal') },
+          { label: 'Messages',     icon: 'chatbubble-ellipses-outline', color: '#22c55e', onPress: () => navigation.navigate('AdminMessaging') },
+          { label: 'Navigator',    icon: 'navigate-outline',         color: '#a855f7', onPress: () => setIndex && setIndex(5) },
+          { label: 'View All',     icon: 'apps-outline',             color: '#64748b', onPress: () => {} },
+        ],
+      ].map((row, rowIdx) => (
+        <View key={rowIdx} style={{ flexDirection: 'row', marginBottom: rowIdx === 0 ? 4 : 0 }}>
+          {row.map((action) => (
+            <TouchableOpacity
+              key={action.label}
+              onPress={action.onPress}
+              activeOpacity={0.6}
+              style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}
+            >
+              <Ionicons name={action.icon} size={30} color={action.color} style={{ marginBottom: 8 }} />
+              <Text style={{
+                fontFamily: 'Outfit-SemiBold',
+                fontSize: 11,
+                color: colors.text,
+                textAlign: 'center',
+              }}>
+                {action.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ))}
+    </View>
+
+    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        CAMPUS SERVICES â€” horizontal scroll like "Do more with GCash"
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    <View style={{ paddingTop: 20, paddingBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 14 }}>
+        <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 15, color: colors.text, flex: 1 }}>
+          Do more with Safire!
+        </Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 16 }}
+      >
+        {[
+          { label: 'Smart\nAttendance', icon: 'school-outline',          color: '#2667ff', screen: 'SmartAttendance' },
+          { label: 'Lost &\nFound',     icon: 'search-outline',           color: '#d97706', screen: 'LostAndFound' },
+          { label: 'Counseling',        icon: 'heart-outline',            color: '#16a34a', screen: null },
+          { label: 'Library',           icon: 'book-outline',             color: '#db2777', screen: 'Library' },
+          { label: 'Announce-\nments',  icon: 'megaphone-outline',        color: '#7c3aed', screen: 'Announcements' },
+          { label: 'Campus\nEvents',    icon: 'calendar-outline',         color: '#ea580c', screen: null },
+          { label: 'Facilities',        icon: 'business-outline',         color: '#0891b2', screen: null },
+          { label: 'Health\nServices',  icon: 'medkit-outline',           color: '#dc2626', screen: null },
+        ].map((svc) => (
+          <TouchableOpacity
+            key={svc.label}
+            activeOpacity={0.6}
+            onPress={() => svc.screen ? navigation.navigate(svc.screen) : Alert.alert('Coming Soon', `${svc.label.replace('\n', ' ')} is coming in a future update!`)}
+            style={{ alignItems: 'center', width: 64 }}
+          >
+            <Ionicons name={svc.icon} size={32} color={svc.color} style={{ marginBottom: 8 }} />
+            <Text style={{
+              fontFamily: 'Outfit-SemiBold',
+              fontSize: 10,
+              color: colors.text,
+              textAlign: 'center',
+              lineHeight: 14,
+            }}>
+              {svc.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+
+    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        FEATURE POSTCARDS â€” promotional banners
+    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+      <Text style={{
+        fontFamily: 'Outfit-Bold',
+        fontSize: 15,
+        color: colors.text,
+        marginBottom: 12,
+      }}>
+        Campus Features
+      </Text>
+
+      {/* Postcard 1 â€” Smart Attendance */}
+      <View style={{
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginBottom: 12,
+        backgroundColor: '#1e3a5f',
+      }}>
+        <View style={{ padding: 18, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <View style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#ffffff22',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              marginBottom: 8,
+            }}>
+              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 9, color: '#93c5fd', letterSpacing: 1 }}>NEW</Text>
+            </View>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 16, color: '#fff', marginBottom: 5 }}>
+              Smart Attendance
+            </Text>
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#93c5fd', lineHeight: 18 }}>
+              QR-based check-in for classes, events, and campus activities â€” all in one tap.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 48, marginLeft: 12 }}>🎓</Text>
+        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: '#2563eb', paddingVertical: 11, alignItems: 'center' }}
+          onPress={() => navigation.navigate('SmartAttendance')}
+        >
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 12, color: '#fff' }}>Open Feature</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Postcard 2 â€” AI Safety Monitor */}
+      <View style={{
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginBottom: 12,
+        backgroundColor: '#1a1a2e',
+      }}>
+        <View style={{ padding: 18, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <View style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#ffffff22',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              marginBottom: 8,
+            }}>
+              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 9, color: '#a78bfa', letterSpacing: 1 }}>ACTIVE</Text>
+            </View>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 16, color: '#fff', marginBottom: 5 }}>
+              AI Safety Monitor
+            </Text>
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#c4b5fd', lineHeight: 18 }}>
+              Every report is automatically reviewed by AI to ensure it meets community standards.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 48, marginLeft: 12 }}>🤖</Text>
+        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: '#7c3aed', paddingVertical: 11, alignItems: 'center' }}
+          onPress={() => navigation.navigate('Report')}
+        >
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 12, color: '#fff' }}>Try It Now</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Postcard 3 â€” Anonymous Reporting */}
+      <View style={{
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginBottom: 12,
+        backgroundColor: '#064e3b',
+      }}>
+        <View style={{ padding: 18, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <View style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#ffffff22',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              marginBottom: 8,
+            }}>
+              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 9, color: '#6ee7b7', letterSpacing: 1 }}>PRIVACY FIRST</Text>
+            </View>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 16, color: '#fff', marginBottom: 5 }}>
+              Anonymous Reporting
+            </Text>
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#6ee7b7', lineHeight: 18 }}>
+              Your identity is fully protected. Report incidents without fear of exposure.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 48, marginLeft: 12 }}>🛡️</Text>
+        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: '#059669', paddingVertical: 11, alignItems: 'center' }}
+          onPress={() => navigation.navigate('Report', { forceAnonymous: true })}
+        >
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 12, color: '#fff' }}>Report Anonymously</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Postcard 4 â€” Campus Health & Helpline */}
+      <View style={{
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginBottom: 4,
+        backgroundColor: '#7f1d1d',
+      }}>
+        <View style={{ padding: 18, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <View style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#ffffff22',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              marginBottom: 8,
+            }}>
+              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 9, color: '#fca5a5', letterSpacing: 1 }}>24 / 7</Text>
+            </View>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 16, color: '#fff', marginBottom: 5 }}>
+              Emergency Helpline
+            </Text>
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: '#fca5a5', lineHeight: 18 }}>
+              Instant SOS reporting with GPS tracking. Response guaranteed within 30 minutes.
+            </Text>
+          </View>
+          <Text style={{ fontSize: 48, marginLeft: 12 }}>🆘</Text>
+        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: '#dc2626', paddingVertical: 11, alignItems: 'center' }}
+          onPress={() => navigation.navigate('EmergencyReport')}
+        >
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 12, color: '#fff' }}>Emergency Report</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+
+    {/* Divider between marketing and content */}
+    <View style={{ height: 8, backgroundColor: colors.background }} />
+
     {/* School News Feed Section */}
     <View style={[styles.schoolNewsSection, { backgroundColor: colors.background }]}>
       <View style={styles.newsSectionHeader}>
@@ -718,6 +1064,8 @@ const HomeTab = ({
               userData={userData}
               handleDeletePost={handleDeletePost}
               navigation={navigation}
+              handleMeToo={handleMeToo}
+              userAffected={userAffected}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -849,299 +1197,307 @@ const MessagesTab = ({ styles, navigation, userData, colors }) => {
 
 const AccountTab = ({ styles, userData, navigation, handleLogout, clearUserData, feedReports, setIndex }) => {
   const { isDarkMode = false, toggleDarkMode = () => {}, colors = { background: '#fff', surface: '#fff', card: '#f0f4ff', text: '#000', textSecondary: '#666', border: '#e0e0e0', inputBackground: '#f5f5f5' } } = useTheme() || {};
-  
-  if (userData) {
+
+  if (!userData) {
     return (
-      <ScrollView 
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        overScrollMode="never"
-        bounces={false}
-        style={{ width: '100%', backgroundColor: colors.background }}
-      >
-        <View style={[styles.userInfoContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.profileHeader}>
-            <View style={styles.coverPhoto}>
-              {userData?.coverPhoto ? (
-                <Image 
-                  source={{ uri: userData.coverPhoto }} 
-                  style={styles.coverPhotoImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.coverPhotoPlaceholder}>
-                  <Ionicons name="images" size={40} color="#2667ff" />
-                </View>
-              )}
-            </View>
-            <View style={styles.profilePicContainer}>
-              {userData?.profilePic ? (
-                <Image 
-                  source={{ uri: userData.profilePic }} 
-                  style={styles.profilePic} 
-                />
-              ) : (
-                <Ionicons name="person-circle" size={80} color="#2667ff" />
-              )}
-            </View>
-          </View>
-          <View style={[styles.accountInfo, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.accountName, { color: colors.text }]}>{userData?.name || userData?.username || 'User'}</Text>
-            <Text style={[styles.accountUsername, { color: colors.textSecondary }]}>
-              @{(() => {
-                if (userData?.username && typeof userData.username === 'string') {
-                  return String(userData.username);
-                }
-                if (userData?.email && typeof userData.email === 'string') {
-                  const emailParts = userData.email.split('@');
-                  return emailParts.length > 0 ? String(emailParts[0]) : 'user';
-                }
-                return 'user';
-              })()}
-            </Text>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="mail" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>{userData?.email || 'No email'}</Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="call" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>{userData?.mobile || 'No phone number'}</Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="card" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>Student ID: {userData?.studentId || 'Not provided'}</Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="calendar" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>Birthday: {userData?.birthday || 'Not provided'}</Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="school" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>School: {userData?.school || 'Not provided'}</Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="briefcase" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                Role: {userData?.role === 'faculty' ? '👨‍🏫 Faculty' : '🎓 Student'}
-              </Text>
-            </View>
-            
-            <View style={[styles.infoSection, { marginBottom: 5 }]}>
-              <Ionicons name="location" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>{userData?.address || 'No address provided'}</Text>
-            </View>
-
-            <View style={[styles.infoSection, { flexDirection: 'column', alignItems: 'flex', marginBottom: 16 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                <Ionicons name="document-text" size={18} color={colors.textSecondary} style={styles.infoIcon} />
-                <Text style={{ fontFamily: 'Outfit-Bold', color: colors.text }}>About</Text>
-              </View>
-              <Text style={[styles.infoText, { marginLeft: 4, marginTop: 4, color: colors.textSecondary }]}>
-                {userData?.bio || 'No bio provided'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Trophy/Gamification Section */}
-          <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
-            <TrophyDisplay 
-              reportsCount={feedReports.filter(r => r.authorId === userData?.uid).length} 
-              userTrophies={userData?.trophies || []} 
-            />
-          </View>
-
-          {/* Test Feedback Button */}
-          <View style={{ paddingHorizontal: 16, marginTop: 15 }}>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#000',
-                paddingVertical: 14,
-                paddingHorizontal: 20,
-                borderRadius: 12,
-                elevation: 2,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-              }}
-              onPress={() => navigation.navigate('TestFeedback')}
-            >
-              <Text style={{
-                fontFamily: 'Outfit-Bold',
-                fontSize: 15,
-                color: '#fff',
-              }}>
-                Submit Test Feedback
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Dark Mode Toggle */}
-          <View style={{ paddingHorizontal: 16, marginTop: 20, marginBottom: 10 }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: colors.card,
-              paddingVertical: 14,
-              paddingHorizontal: 20,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name={isDarkMode ? 'moon' : 'sunny'} size={20} color={colors.text} />
-                <Text style={{
-                  fontFamily: 'Outfit-Bold',
-                  fontSize: 15,
-                  color: colors.text,
-                  marginLeft: 10,
-                }}>
-                  Dark Mode
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={toggleDarkMode}
-                style={{
-                  width: 50,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: isDarkMode ? '#2667ff' : '#ccc',
-                  justifyContent: 'center',
-                  paddingHorizontal: 2,
-                }}
-              >
-                <View style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  backgroundColor: '#fff',
-                  transform: [{ translateX: isDarkMode ? 22 : 2 }],
-                }} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Your Reports Section */}
-          <View style={{  marginTop: 20, paddingHorizontal: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Ionicons name="newspaper" size={20} color="#2667ff" />
-              <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 18, marginLeft: 8, color: colors.text }}>
-                Your Reports
-              </Text>
-            </View>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'space-around',
-              backgroundColor: colors.card,
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: colors.border
-            }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#2667ff' }}>
-                  {feedReports.filter(r => r.authorId === userData?.uid).length}
-                </Text>
-                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-                  Total
-                </Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#ffa500' }}>
-                  {feedReports.filter(r => r.authorId === userData?.uid && r.status === 'pending').length}
-                </Text>
-                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-                  Pending
-                </Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 24, color: '#4caf50' }}>
-                  {feedReports.filter(r => r.authorId === userData?.uid && r.status === 'resolved').length}
-                </Text>
-                <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-                  Resolved
-                </Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity
-              style={styles.viewReportsButton}
-              onPress={() => {
-                // Filter to show only user's reports
-                setIndex(0); // Switch to Feed tab
-              }}
-            >
-              <Ionicons name="list" size={20} color="#2667ff" />
-              <Text style={styles.viewReportsButtonText}>
-                View All My Reports
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ marginTop: 16 }}>
-            <TouchableOpacity 
-              style={[styles.editProfileButton, { 
-                backgroundColor: colors.card,
-                borderColor: '#2667ff',
-              }]}
-              onPress={() => navigation.navigate('EditProfile')}
-            >
-              <Text style={styles.editProfileText}>Edit Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#000',
-                paddingVertical: 14,
-                paddingHorizontal: 20,
-                borderRadius: 12,
-                marginHorizontal: 16,
-                marginTop: 12,
-              }]}
-              onPress={handleLogout}
-            >
-              <Text style={{
-                fontFamily: 'Outfit-Bold',
-                fontSize: 15,
-                color: '#fff',
-              }}>Log Out</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+      <View style={[styles.centerTab, { justifyContent: 'center' }]}>
+        <Ionicons name="alert-circle" size={50} color="#ff6b6b" />
+        <Text style={{ marginTop: 10, color: '#666', fontFamily: 'Outfit-Regular' }}>No user data available</Text>
+        <TouchableOpacity style={[styles.logoutBtn, { marginTop: 20 }]} onPress={() => { clearUserData(); navigation.navigate('Login'); }}>
+          <Text style={styles.logoutText}>Go to Login</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
-  
+
+  // Derived values
+  const displayName = userData?.name || userData?.username || 'User';
+  const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const username = (() => {
+    if (userData?.username) return '@' + userData.username;
+    if (userData?.email) return '@' + userData.email.split('@')[0];
+    return '@user';
+  })();
+  const roleBadge = userData?.role === 'faculty' ? 'Faculty' : 'Student';
+  const myReports = feedReports.filter(r => r.authorId === userData?.uid);
+  const totalReports  = myReports.length;
+  const pendingCount  = myReports.filter(r => r.status === 'pending').length;
+  const resolvedCount = myReports.filter(r => r.status === 'resolved').length;
+
+  // â”€â”€ Reusable row component (icon + label + right side + chevron) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const MenuRow = ({ icon, iconColor = '#2667ff', label, right, onPress, isLast = false, danger = false }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.65}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+        backgroundColor: colors.surface,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: colors.border,
+      }}
+    >
+      {/* Left icon */}
+      <View style={{
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: danger ? '#fee2e2' : iconColor + '18',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 14,
+      }}>
+        <Ionicons name={icon} size={18} color={danger ? '#ef4444' : iconColor} />
+      </View>
+
+      {/* Label */}
+      <Text style={{
+        flex: 1,
+        fontFamily: 'Outfit-SemiBold',
+        fontSize: 14,
+        color: danger ? '#ef4444' : colors.text,
+      }}>
+        {label}
+      </Text>
+
+      {/* Right element (badge, toggle, text) */}
+      {right && <View style={{ marginRight: 6 }}>{right}</View>}
+
+      {/* Chevron */}
+      {!danger && <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />}
+    </TouchableOpacity>
+  );
+
+  // â”€â”€ Section wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const MenuSection = ({ title, children }) => (
+    <View style={{ marginTop: 20 }}>
+      {title && (
+        <Text style={{
+          fontFamily: 'Outfit-Bold',
+          fontSize: 11,
+          color: colors.textSecondary,
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+          marginLeft: 20,
+          marginBottom: 6,
+        }}>
+          {title}
+        </Text>
+      )}
+      <View style={{
+        backgroundColor: colors.surface,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: colors.border,
+      }}>
+        {children}
+      </View>
+    </View>
+  );
+
+  // â”€â”€ Dark mode toggle (inline right element) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const DarkModeToggle = () => (
+    <TouchableOpacity
+      onPress={toggleDarkMode}
+      style={{
+        width: 44,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: isDarkMode ? '#2667ff' : '#d1d5db',
+        justifyContent: 'center',
+        paddingHorizontal: 2,
+      }}
+    >
+      <View style={{
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#fff',
+        transform: [{ translateX: isDarkMode ? 18 : 0 }],
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+      }} />
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={[styles.centerTab, { justifyContent: 'center' }]}>
-      <Ionicons name="alert-circle" size={50} color="#ff6b6b" />
-      <Text style={{ marginTop: 10, color: '#666', fontFamily: 'Outfit-Regular' }}>No user data available</Text>
-      <TouchableOpacity 
-        style={[styles.logoutBtn, { marginTop: 20 }]} 
-        onPress={() => {
-          clearUserData();
-          navigation.navigate('Login');
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      overScrollMode="never"
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingBottom: 40 }}
+    >
+      {/* â”€â”€ Header â”€â”€ */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('EditProfile')}
+        style={{
+          backgroundColor: '#2667ff',
+          paddingTop: 28,
+          paddingBottom: 24,
+          paddingHorizontal: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
         }}
       >
-        <Text style={styles.logoutText}>Go to Login</Text>
+        {/* Avatar */}
+        {userData?.profilePic ? (
+          <Image
+            source={{ uri: userData.profilePic }}
+            style={{ width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: '#ffffff55' }}
+          />
+        ) : (
+          <View style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: '#fff',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 22, color: '#2667ff' }}>{initials}</Text>
+          </View>
+        )}
+
+        {/* Name + role */}
+        <View style={{ flex: 1, marginLeft: 14 }}>
+          <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 18, color: '#fff' }} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 13, color: '#ffffffbb', marginTop: 2 }} numberOfLines={1}>
+            {username}
+          </Text>
+          <View style={{
+            marginTop: 5,
+            alignSelf: 'flex-start',
+            backgroundColor: '#ffffff25',
+            borderRadius: 8,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+          }}>
+            <Text style={{ fontFamily: 'Outfit-SemiBold', fontSize: 11, color: '#fff' }}>{roleBadge}</Text>
+          </View>
+        </View>
+
+        {/* Chevron to edit profile */}
+        <Ionicons name="chevron-forward" size={20} color="#ffffffbb" />
       </TouchableOpacity>
-    </View>
+
+      {/* â”€â”€ Report Stats Strip (CTA below header) â”€â”€ */}
+      <View style={{
+        flexDirection: 'row',
+        backgroundColor: colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}>
+        {[
+          { label: 'Total',    value: totalReports,  color: '#2667ff' },
+          { label: 'Pending',  value: pendingCount,  color: '#f59e0b' },
+          { label: 'Resolved', value: resolvedCount, color: '#22c55e' },
+        ].map((stat, i) => (
+          <TouchableOpacity
+            key={stat.label}
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              paddingVertical: 16,
+              borderRightWidth: i < 2 ? 1 : 0,
+              borderRightColor: colors.border,
+            }}
+            onPress={() => navigation.navigate('MyReports')}
+          >
+            <Text style={{ fontFamily: 'Outfit-Bold', fontSize: 22, color: stat.color }}>{stat.value}</Text>
+            <Text style={{ fontFamily: 'Outfit-Regular', fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>{stat.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* â”€â”€ Trophies strip â”€â”€ */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 }}>
+        <TrophyDisplay
+          reportsCount={totalReports}
+          userTrophies={userData?.trophies || []}
+          colors={colors}
+          isDarkMode={isDarkMode}
+        />
+      </View>
+
+      {/* â”€â”€ My Activity â”€â”€ */}
+      <MenuSection title="My Activity">
+        <MenuRow
+          icon="reader-outline"
+          label="My Reports"
+          right={<Text style={{ fontSize: 13, color: colors.textSecondary, fontFamily: 'Outfit-Regular' }}>{totalReports} total</Text>}
+          onPress={() => navigation.navigate('MyReports')}
+        />
+        <MenuRow
+          icon="location-outline"
+          iconColor="#ef4444"
+          label="Campus Hotspot Map"
+          onPress={() => navigation.navigate('HotspotMap')}
+        />
+        <MenuRow
+          icon="ribbon-outline"
+          iconColor="#8b5cf6"
+          label="My Appeals"
+          onPress={() => navigation.navigate('Appeal')}
+          isLast
+        />
+      </MenuSection>
+
+      {/* â”€â”€ Account â”€â”€ */}
+      <MenuSection title="Account">
+        <MenuRow
+          icon="person-circle-outline"
+          label="Edit Profile"
+          right={<Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: 'Outfit-Regular' }}>{userData?.email || ''}</Text>}
+          onPress={() => navigation.navigate('EditProfile')}
+        />
+        <MenuRow
+          icon="card-outline"
+          iconColor="#06b6d4"
+          label="Student ID"
+          right={<Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: 'Outfit-Regular' }}>{userData?.studentId || 'Not set'}</Text>}
+          onPress={() => navigation.navigate('EditProfile')}
+        />
+        <MenuRow
+          icon={isDarkMode ? 'moon-outline' : 'sunny-outline'}
+          iconColor="#f59e0b"
+          label="Dark Mode"
+          right={<DarkModeToggle />}
+          onPress={toggleDarkMode}
+          isLast
+        />
+      </MenuSection>
+
+      {/* â”€â”€ More â”€â”€ */}
+      <MenuSection title="More">
+        <MenuRow
+          icon="chatbubble-outline"
+          iconColor="#22c55e"
+          label="Submit Test Feedback"
+          onPress={() => navigation.navigate('TestFeedback')}
+          isLast
+        />
+      </MenuSection>
+
+      {/* â”€â”€ Log Out â”€â”€ */}
+      <View style={{ marginTop: 20, paddingHorizontal: 16 }}>
+        <MenuRow
+          icon="log-out-outline"
+          label="Log Out"
+          danger
+          onPress={handleLogout}
+          isLast
+        />
+      </View>
+    </ScrollView>
   );
 };
 
@@ -1259,6 +1615,8 @@ export default function HomeScreen({ navigation, route }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [userUpvotes, setUserUpvotes] = useState({});
+  const [userAffected, setUserAffected] = useState({});
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [schoolNews, setSchoolNews] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -1579,6 +1937,38 @@ export default function HomeScreen({ navigation, route }) {
     }
   }, [userUpvotes]);
 
+  // "Me Too" / also affected by this issue handler
+  const handleMeToo = useCallback(async (reportId) => {
+    if (!userData?.uid) {
+      Alert.alert('Sign in required', 'You must be logged in to mark yourself as affected.');
+      return;
+    }
+    const alreadyAffected = !!userAffected[reportId];
+    // Optimistic update
+    setUserAffected(prev => ({ ...prev, [reportId]: !alreadyAffected }));
+    setFeed(prevFeed =>
+      prevFeed.map(item =>
+        item.id === reportId
+          ? { ...item, affectedCount: alreadyAffected ? Math.max((item.affectedCount || 0) - 1, 0) : (item.affectedCount || 0) + 1 }
+          : item
+      )
+    );
+    try {
+      const result = await ReportService.meTooReport(reportId, userData.uid, alreadyAffected);
+      if (!result.success) throw new Error(result.error);
+    } catch (err) {
+      console.warn('Me Too error:', err);
+      setUserAffected(prev => ({ ...prev, [reportId]: alreadyAffected }));
+      setFeed(prevFeed =>
+        prevFeed.map(item =>
+          item.id === reportId
+            ? { ...item, affectedCount: alreadyAffected ? (item.affectedCount || 0) + 1 : Math.max((item.affectedCount || 0) - 1, 0) }
+            : item
+        )
+      );
+    }
+  }, [userData?.uid, userAffected]);
+
   // Handle view tracking - wrapped in useCallback
   const handleViewReport = useCallback(async (reportId, currentUserId) => {
     if (!currentUserId) return;
@@ -1677,7 +2067,7 @@ export default function HomeScreen({ navigation, route }) {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={[styles.centerTab, { justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" color="#2667ff" />
+          <ActivityIndicator size="large" color="#113588" />
           <Text style={{ marginTop: 10, color: '#666', fontFamily: 'System' }}>Loading...</Text>
         </View>
       </View>
@@ -1991,6 +2381,8 @@ export default function HomeScreen({ navigation, route }) {
       handleDeletePost={handleDeletePost}
       userData={userData}
       userUpvotes={userUpvotes}
+      handleMeToo={handleMeToo}
+      userAffected={userAffected}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
       selectedBuilding={selectedBuilding}
@@ -1999,6 +2391,7 @@ export default function HomeScreen({ navigation, route }) {
       filteredFeed={filteredFeed}
       navigation={navigation}
       colors={colors}
+      setIndex={setIndex}
     />,
     dashboard: () => <SupportScreen />,
     messages: () => <MessagesTab navigation={navigation} styles={styles} userData={userData} colors={colors} />,
@@ -2090,14 +2483,14 @@ export default function HomeScreen({ navigation, route }) {
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(1)}>
               <Ionicons
-                name={index === 1 ? "heart-circle" : "heart-circle-outline"}
+                name={index === 1 ? "bar-chart" : "bar-chart-outline"}
                 size={24}
                 color={index === 1 ? colors.text : colors.textSecondary}
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(2)}>
               <Ionicons 
-                name={index === 2 ? "chatbubbles" : "chatbubbles-outline"} 
+                name={index === 2 ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} 
                 size={24} 
                 color={index === 2 ? colors.text : colors.textSecondary} 
               />
@@ -2107,7 +2500,7 @@ export default function HomeScreen({ navigation, route }) {
           <View style={styles.navRow}>
             <TouchableOpacity style={styles.navItem} onPress={() => handleNavPress(4)}>
               <Ionicons 
-                name={index === 4 ? "warning" : "warning-outline"} 
+                name={index === 4 ? "alert-circle" : "alert-circle-outline"} 
                 size={24} 
                 color={index === 4 ? colors.text : colors.textSecondary} 
               />
@@ -2136,10 +2529,56 @@ export default function HomeScreen({ navigation, route }) {
           activeOpacity={0.8}
         >
           <View style={styles.navPlusButton}>
-            <Ionicons name="add-circle" size={36} color="#2667ff" />
+            <Ionicons name="add" size={30} color="#2667ff" />
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Emergency Quick Report FAB */}
+      <TouchableOpacity
+        style={styles.emergencyFAB}
+        onPress={() => setShowEmergencyModal(true)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="alert-circle-outline" size={20} color="#fff" />
+        <Text style={styles.emergencyFABText}>SOS</Text>
+      </TouchableOpacity>
+
+      {/* Emergency Confirmation Modal */}
+      <Modal
+        visible={showEmergencyModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowEmergencyModal(false)}
+      >
+        <View style={styles.emergencyOverlay}>
+          <View style={styles.emergencyBox}>
+            <View style={styles.emergencyIconWrap}>
+              <Ionicons name="warning" size={44} color="#ff3b30" />
+            </View>
+            <Text style={styles.emergencyTitle}>Emergency Report</Text>
+            <Text style={styles.emergencyDesc}>
+              This will open a pre-filled{`\n`}critical-priority emergency report.{`\n`}Only use for genuine emergencies.
+            </Text>
+            <TouchableOpacity
+              style={styles.emergencyConfirmBtn}
+              onPress={() => {
+                setShowEmergencyModal(false);
+                navigation.navigate('EmergencyReport');
+              }}
+            >
+              <Ionicons name="warning" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.emergencyConfirmText}>Report Emergency Now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.emergencyCancelBtn}
+              onPress={() => setShowEmergencyModal(false)}
+            >
+              <Text style={styles.emergencyCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Notifications Modal */}
       <Modal
@@ -3373,5 +3812,98 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.actionText,
     color: '#2667ff',
     marginLeft: 8,
+  },
+  // â”€â”€ Emergency FAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  emergencyFAB: {
+    position: 'absolute',
+    right: 20,
+    bottom: 90,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ff3b30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ff3b30',
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+    zIndex: 999,
+  },
+  emergencyFABText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: 'Outfit-Bold',
+    marginTop: 1,
+  },
+  emergencyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  emergencyBox: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  emergencyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#ff3b3015',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emergencyTitle: {
+    fontSize: 22,
+    fontFamily: 'Outfit-Bold',
+    color: '#1a1a1a',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emergencyDesc: {
+    fontSize: 15,
+    fontFamily: 'Outfit-Regular',
+    color: '#555',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  emergencyConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ff3b30',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+    marginBottom: 10,
+  },
+  emergencyConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Outfit-Bold',
+  },
+  emergencyCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  emergencyCancelText: {
+    color: '#888',
+    fontSize: 15,
+    fontFamily: 'Outfit-Regular',
   },
 });

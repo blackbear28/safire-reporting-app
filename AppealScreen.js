@@ -1,4 +1,4 @@
-// Appeal Screen - ISO 21001:2018 Compliant
+﻿// Appeal Screen - ISO 21001:2018 Compliant
 // Allows users to submit appeals for rejected reports
 // Reference: MO-4.16 Handling Complaint's Appeals
 
@@ -19,19 +19,51 @@ import AppealService, { APPEAL_STATUS } from './services/appealService';
 import * as ImagePicker from 'expo-image-picker';
 
 const AppealScreen = ({ route, navigation }) => {
-  const { reportId, reportTitle } = route.params;
+  const params = route?.params || {};
+  const reportId = params.reportId;
+  const reportTitle = params.reportTitle;
   const { user: userData } = useUser();
+  const isListMode = !reportId;
   
   const [reason, setReason] = useState('');
   const [evidence, setEvidence] = useState([]);
   const [loading, setLoading] = useState(false);
   const [existingAppeal, setExistingAppeal] = useState(null);
+  const [userAppeals, setUserAppeals] = useState([]);
+  const [appealsLoading, setAppealsLoading] = useState(false);
+  const [appealsError, setAppealsError] = useState(null);
 
   useEffect(() => {
-    checkExistingAppeal();
-  }, []);
+    if (!userData?.uid) return;
+    if (isListMode) {
+      loadUserAppeals();
+    } else {
+      checkExistingAppeal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData?.uid, reportId]);
+
+  const loadUserAppeals = async () => {
+    try {
+      setAppealsLoading(true);
+      setAppealsError(null);
+
+      const result = await AppealService.getUserAppeals(userData.uid);
+      if (result.success) {
+        setUserAppeals(result.appeals || []);
+      } else {
+        setAppealsError(result.error || 'Failed to load appeals');
+      }
+    } catch (error) {
+      console.error('Error loading user appeals:', error);
+      setAppealsError('Failed to load appeals');
+    } finally {
+      setAppealsLoading(false);
+    }
+  };
 
   const checkExistingAppeal = async () => {
+    if (!userData?.uid || !reportId) return;
     try {
       const result = await AppealService.getUserAppeals(userData.uid);
       if (result.success) {
@@ -46,6 +78,10 @@ const AppealScreen = ({ route, navigation }) => {
   };
 
   const handleSubmitAppeal = async () => {
+    if (!reportId) {
+      Alert.alert('Select a Report', 'Please open a rejected report first, then tap “Submit Appeal”.');
+      return;
+    }
     if (!reason.trim()) {
       Alert.alert('Required', 'Please provide a reason for your appeal.');
       return;
@@ -278,6 +314,76 @@ const AppealScreen = ({ route, navigation }) => {
           onPress={() => navigation.goBack()}
         >
           <Text style={styles.backButtonText}>Back to Reports</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  // My Appeals list mode (opened without a reportId)
+  if (isListMode) {
+    return (
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>My Appeals</Text>
+          <Text style={styles.reportTitle}>View your appeal statuses and details</Text>
+        </View>
+
+        {appealsLoading ? (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#2667ff" />
+            <Text style={{ marginTop: 10, color: '#666' }}>Loading your appeals...</Text>
+          </View>
+        ) : appealsError ? (
+          <View style={styles.detailsContainer}>
+            <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Couldn’t load appeals</Text>
+            <Text style={styles.infoText}>{appealsError}</Text>
+            <TouchableOpacity style={styles.backButton} onPress={loadUserAppeals}>
+              <Text style={styles.backButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : userAppeals.length === 0 ? (
+          <View style={styles.detailsContainer}>
+            <Text style={[styles.sectionTitle, { marginTop: 0 }]}>No appeals yet</Text>
+            <Text style={styles.infoText}>
+              You can submit an appeal from a rejected report’s details screen.
+            </Text>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('MyReports')}
+            >
+              <Text style={styles.backButtonText}>Go to My Reports</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {userAppeals.map((appeal) => (
+              <TouchableOpacity
+                key={appeal.id}
+                style={styles.appealListItem}
+                activeOpacity={0.7}
+                onPress={() => navigation.push('Appeal', {
+                  reportId: appeal.reportId,
+                  reportTitle: appeal.reportTitle || 'Report'
+                })}
+              >
+                <Text style={styles.appealListTitle}>{appeal.reportTitle || 'Untitled Report'}</Text>
+                <Text style={styles.appealListMeta}>
+                  Submitted: {appeal.submittedAt ? new Date(appeal.submittedAt).toLocaleString() : '—'}
+                </Text>
+
+                <View style={[styles.appealStatusPill, { backgroundColor: getStatusColor(appeal.status) }]}>
+                  <Text style={styles.appealStatusPillText}>{getStatusText(appeal.status)}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.cancelButtonText}>Back</Text>
         </TouchableOpacity>
       </ScrollView>
     );
@@ -671,6 +777,36 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold'
+  },
+  appealListItem: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 8,
+    elevation: 2
+  },
+  appealListTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 6
+  },
+  appealListMeta: {
+    fontSize: 12,
+    color: '#666'
+  },
+  appealStatusPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginTop: 12
+  },
+  appealStatusPillText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold'
   }
 });

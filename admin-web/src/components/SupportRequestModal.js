@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { Box, Button, Typography, Modal, Stack } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import EmailIcon from '@mui/icons-material/Email';

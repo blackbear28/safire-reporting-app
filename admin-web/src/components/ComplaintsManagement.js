@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Paper,
-  Grid,
   Button,
   Dialog,
   DialogTitle,
@@ -12,10 +11,20 @@ import {
   Chip,
   Snackbar
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import { collection, query, onSnapshot, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import PrintComplaint from './PrintComplaint';
-import { FormatListBulleted, Delete, CheckCircle } from '@mui/icons-material';
+import { FormatListBulleted, SaveAlt } from '@mui/icons-material';
+import { Grid } from '@mui/material';
+
+function exportCSV(rows, cols, filename = 'complaints_export.csv') {
+  if (!rows || rows.length === 0) return;
+  const csvRows = [cols.join(',')].concat(rows.map(r => cols.map(c => `"${(r[c]||'').toString().replace(/"/g,'""')}"`).join(',')));
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+}
 
 export default function ComplaintsManagement({ userRole }) {
   const [complaints, setComplaints] = useState([]);
@@ -24,6 +33,7 @@ export default function ComplaintsManagement({ userRole }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [selectionModel, setSelectionModel] = useState([]);
 
   useEffect(() => {
     const q = query(collection(db, 'complaints'), orderBy('createdAt', 'desc'));
@@ -90,36 +100,39 @@ export default function ComplaintsManagement({ userRole }) {
         <Chip label={loading ? 'Loading…' : `${complaints.length} items`} />
       </Box>
 
-      <Grid container spacing={2}>
-        {complaints.map((c) => (
-          <Grid item xs={12} md={6} key={c.id}>
-            <Paper sx={{ p: 2 }}>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{c.title || 'No title'}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {c.anonymous ? 'Anonymous' : (c.authorName || 'Unknown')} • {c.department || ''}
-                  </Typography>
-                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>{c.description?.slice(0, 160)}{c.description && c.description.length > 160 ? '…' : ''}</Typography>
-                  {c.preferredOutcome && (
-                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>Preferred: {c.preferredOutcome}</Typography>
-                  )}
-                </Box>
-
-                <Box display="flex" flexDirection="column" alignItems="flex-end" gap={1}>
-                  <Chip label={c.status || 'submitted'} size="small" />
-                  <Box>
-                    <Button size="small" onClick={() => openDetails(c)}>View</Button>
-                    <Button size="small" onClick={() => handlePrint(c)}>Print</Button>
-                    <Button size="small" color="success" onClick={() => markResolved(c)} startIcon={<CheckCircle />}>Resolve</Button>
-                    <Button size="small" color="error" onClick={() => removeComplaint(c)} startIcon={<Delete />}>Delete</Button>
-                  </Box>
-                </Box>
+      <Paper sx={{ height: 600, width: '100%', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
+          <Button size="small" variant="outlined" startIcon={<SaveAlt />} onClick={() => exportCSV(complaints, ['id','title','status','department','authorName','createdAt'], 'complaints.csv')}>Export CSV</Button>
+          <Button size="small" color="primary" variant="contained" disabled={selectionModel.length===0} onClick={async () => {
+            for (const id of selectionModel) await updateDoc(doc(db,'complaints',id), { status: 'resolved', updatedAt: new Date() });
+            setSelectionModel([]);
+            setSnackbar({ open: true, message: 'Marked selected resolved', severity: 'success' });
+          }}>Mark Resolved ({selectionModel.length})</Button>
+        </Box>
+        <DataGrid
+          rows={complaints.map(c => ({ ...c, id: c.id, createdAt: c.createdAt }))}
+          columns={[
+            { field: 'title', headerName: 'Title', flex: 1, minWidth: 200 },
+            { field: 'status', headerName: 'Status', width: 120, renderCell: (p) => <Chip label={p.value} size="small" /> },
+            { field: 'department', headerName: 'Department', width: 140 },
+            { field: 'authorName', headerName: 'Reporter', width: 160 },
+            { field: 'createdAt', headerName: 'Date', width: 150, valueGetter: (p) => p.value?.toDate ? p.value.toDate().toLocaleString() : '' },
+            { field: 'actions', headerName: 'Actions', width: 220, sortable: false, filterable: false, renderCell: (p) => (
+              <Box>
+                <Button size="small" onClick={() => openDetails(p.row)}>View</Button>
+                <Button size="small" onClick={() => handlePrint(p.row)}>Print</Button>
+                <Button size="small" color="success" onClick={() => markResolved(p.row)}>Resolve</Button>
+                <Button size="small" color="error" onClick={() => removeComplaint(p.row)}>Delete</Button>
               </Box>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
+            ) }
+          ]}
+          loading={loading}
+          checkboxSelection
+          selectionModel={selectionModel}
+          onSelectionModelChange={(newSel) => setSelectionModel(newSel)}
+          pageSize={10}
+        />
+      </Paper>
 
       <Dialog open={dialogOpen} onClose={closeDetails} maxWidth="md" fullWidth>
         <DialogTitle>Complaint Details</DialogTitle>
